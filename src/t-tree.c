@@ -126,23 +126,25 @@ Node* __rightRotate(Node* node) {
 
 // Rebalances the subtree with root node `node`. Returns the new root node.
 Node* __rebalance_subtree(Node* node) {
-    // Left left
-    if (__node_balance(node) > 1 && __node_balance(node->left) >= 0) {
-        return __rightRotate(node);
+    if (__node_balance(node) > 1) {
+        if (__node_balance(node->left) >= 0) {
+            // Left left
+            return __rightRotate(node);
+        } else {
+            // Left right
+            node->left = __leftRotate(node->left);
+            return __rightRotate(node);
+        }
     }
-    // Right right
-    if (__node_balance(node) < -1 && __node_balance(node->right) <= 0) {
-        return __leftRotate(node);
-    }
-    // Left right
-    if (__node_balance(node) > 1 && __node_balance(node->left) < 0) {
-        node->left = __leftRotate(node->left);
-        return __rightRotate(node);
-    }
-    // Right left
-    if (__node_balance(node) < -1 && __node_balance(node->right) > 0) {
-        node->right = __rightRotate(node->right);
-        return __leftRotate(node);
+    if (__node_balance(node) < -1) {
+        if (__node_balance(node->right) <= 0) {
+            // Right right
+            return __leftRotate(node);
+        } else {
+            // Right left
+            node->right = __rightRotate(node->right);
+            return __leftRotate(node);
+        }
     }
     // No balancing needed
     return node;
@@ -226,17 +228,25 @@ Row* TTree_get(const TTree* tree, ID id) {
 }
 
 // Insert or update a row by ID into the subtree rooted at `node`.
-// Returns the (possibly new) root of the subtree.
+// Returns the new root of the subtree, or NULL if no node was created.
 Node* __put_inner(Node* node, ID id, const Row* row) {
     assert(node != NULL);
     size_t node_len = node->length;
     assert(node_len > 0);
     if (node->left != NULL && id < node->ids[0]) {
         // id is too small, go left
-        node->left = __put_inner(node->left, id, row);
+        Node* new_left = __put_inner(node->left, id, row);
+        if (new_left == NULL) {
+            return NULL;
+        }
+        node->left = new_left;
     } else if (node->right != NULL && id > node->ids[node_len - 1]) {
         // id is too big, go right
-        node->right = __put_inner(node->right, id, row);
+        Node* new_right = __put_inner(node->right, id, row);
+        if (new_right == NULL) {
+            return NULL;
+        }
+        node->right = new_right;
     } else {
         // id is bounded by this node, insert it
         size_t pos = __linear_search(node->ids, node_len, id);
@@ -244,7 +254,7 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
             // Update existing row
             Row_destroy(&node->data[pos]);
             node->data[pos] = Row_dupe(row);
-            return node;
+            return NULL;
         }
 
         if (node_len < NODE_SIZE) {
@@ -255,7 +265,7 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
             // TODO: check performance diff when rows are pointers instead of the whole thing
             memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
             node->data[pos] = Row_dupe(row);
-            return node;
+            return NULL;
         }
 
         // No more space, create a new node or displace values
@@ -285,7 +295,7 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
                 child->data[child->length++] = removed_row;
                 // No new node created, exit early
                 if (child->length > 1) {
-                    return node;
+                    return NULL;
                 }
             } else {
                 // There is no space in the left node, put it further down
@@ -293,13 +303,17 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
                     child->right = __create_node(removed_id, &removed_row);
                     __update_node_height(child);
                 } else {
-                    child->right = __put_inner(child->right, removed_id, &removed_row);
+                    Node* new_right = __put_inner(child->right, removed_id, &removed_row);
+                    if (new_right == NULL) {
+                        return NULL;
+                    }
+                    child->right = new_right;
                 }
             }
         }
     }
 
-    // New node might have been added, balance the tree again
+    // New node was added, balance the tree again
     __update_node_height(node);
     return __rebalance_subtree(node);
 }
@@ -310,7 +324,10 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     if (tree->root == NULL) {
         tree->root = __create_node(id, row);
     } else {
-        tree->root = __put_inner(tree->root, id, row);
+        Node* new_root = __put_inner(tree->root, id, row);
+        if (new_root != NULL) {
+            tree->root = new_root;
+        }
     }
 }
 
