@@ -31,7 +31,7 @@ typedef struct Node {
     uint8_t height;
     struct Node* left;
     struct Node* right;
-    // TODO: add a parent pointer
+    // TODO: make this an array of pointers to copy less and check performance diff
     // data must come last so that everything else is cache-aligned.
     Row data[NODE_SIZE];
 } Node;
@@ -48,11 +48,10 @@ typedef struct {
 typedef struct {
     NodeList nodes;
     uint8_t pos;
-    bool go_right_next;
 } TTreeIter;
 
 // Create an empty node.
-Node* __create_node_empty() {
+Node* __create_node_empty(void) {
     // TODO: allocate in bigger blocks so that this outperforms malloc
     // Node* node = aligned_alloc(CACHE_SIZE, sizeof(Node));
     Node* node = malloc(sizeof(Node));
@@ -96,7 +95,7 @@ static inline int8_t __node_balance(Node* node) {
 }
 
 // Create an empty TTree.
-TTree TTree_create() { return (TTree){.root = NULL}; }
+TTree TTree_create(void) { return (TTree){.root = NULL}; }
 
 // Perform a left rotation on the root node `node`. Returns the new root node.
 Node* __leftRotate(Node* node) {
@@ -154,7 +153,7 @@ Node* __rebalance_subtree(Node* node) {
 size_t __linear_search(ID* ids, size_t ids_len, ID id) {
     size_t pos = 0;
 
-    // Use SIMD for first 8 comparisions if possible
+    // Use SIMD for first 8 comparisions if possible (there are only 11)
 #if defined(__AVX2__)
     // Add offset to convert to signed range for correct comparison
     const __m256i offset = _mm256_set1_epi32(INT32_MIN);
@@ -163,7 +162,7 @@ size_t __linear_search(ID* ids, size_t ids_len, ID id) {
     ids_vec = _mm256_add_epi32(ids_vec, offset);
     __m256i cmp_mask = _mm256_cmpgt_epi32(id_vec, ids_vec);
     int mask = _mm256_movemask_ps((__m256)cmp_mask);
-    pos += __builtin_ctz(~mask | (1 << 8));
+    pos += __builtin_ctz((1 << 8) | ~mask);
 #endif
 
     while (pos < ids_len && id > ids[pos]) {
@@ -176,6 +175,7 @@ size_t __linear_search(ID* ids, size_t ids_len, ID id) {
 // the position within that node used for insertion of the given ID.
 // Returns true if the ID already exists, false otherwise.
 bool __get_bounding(const TTree* tree, ID id, Node** out_node, size_t* out_pos) {
+    // TODO: return node trace (stack allocated Node*[64])
     assert(tree->root != NULL);
 
     // Search for bounding node, starting at root
@@ -197,12 +197,8 @@ bool __get_bounding(const TTree* tree, ID id, Node** out_node, size_t* out_pos) 
             continue;
         }
 
-        // TODO: optimize with SIMD
         // id is bounded by this node, linear scan for position
-        size_t pos = 0;
-        while (pos < node_len && id > node->ids[pos]) {
-            pos++;
-        }
+        size_t pos = __linear_search(node->ids, node_len, id);
         *out_node = node;
         *out_pos = pos;
         return id == node->ids[pos];
@@ -229,6 +225,7 @@ Row* TTree_get(const TTree* tree, ID id) {
 
 // Insert or update a row by ID into the subtree rooted at `node`.
 // Returns the new root of the subtree, or NULL if no node was created.
+// TODO: nicer API that aligns with __remove_inner
 Node* __put_inner(Node* node, ID id, const Row* row) {
     assert(node != NULL);
     size_t node_len = node->length;
@@ -258,6 +255,7 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
         }
 
         if (node_len < NODE_SIZE) {
+            // TODO: extract insert and remove to function
             // There's space, insert it here
             memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
             node->ids[pos] = id;
@@ -276,6 +274,7 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
             assert(node->right == NULL);
             node->right = __create_node(id, row);
         } else {
+            // TODO: choose between smallest and largest ID depending on which child is NULL
             // Remove smallest id
             ID removed_id = node->ids[0];
             memmove(&node->ids[0], &node->ids[1], (pos - 1) * sizeof(ID));
@@ -285,11 +284,24 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
             memmove(&node->data[0], &node->data[1], (pos - 1) * sizeof(Row));
             node->data[pos - 1] = Row_dupe(row);
 
+            // TODO: try insert into right subtree and measure performance diff of remove
             // Insert the removed id into the left subtree
+            // TODO: tune capacity
+            Node* ancestors_buf[128];
+            NodeList ancestors = (NodeList){
+                .items = ancestors_buf,
+                .length = 0,
+                .capacity = sizeof(ancestors_buf) / sizeof(ancestors_buf[0]),
+            };
             if (node->left == NULL) {
                 node->left = __create_node_empty();
             }
             Node* child = node->left;
+            while (child->right != NULL) {
+                NodeList_append_assume_capacity(&ancestors, child);
+                child = child->right;
+            }
+
             if (child->length < NODE_SIZE) {
                 child->ids[child->length] = removed_id;
                 child->data[child->length++] = removed_row;
@@ -298,17 +310,21 @@ Node* __put_inner(Node* node, ID id, const Row* row) {
                     return NULL;
                 }
             } else {
-                // There is no space in the left node, put it further down
-                if (child->right == NULL) {
-                    child->right = __create_node(removed_id, &removed_row);
-                    __update_node_height(child);
-                } else {
-                    Node* new_right = __put_inner(child->right, removed_id, &removed_row);
-                    if (new_right == NULL) {
-                        return NULL;
-                    }
-                    child->right = new_right;
-                }
+                // There is no space in the left subtree, put it further down
+                child->right = __create_node(removed_id, &removed_row);
+                // No need to balance a half leaf node
+                assert(child->height <= 2);
+                __update_node_height(child);
+            }
+
+            // Rebalance the ancestors
+            while (ancestors.length > 0) {
+                Node* ancestor = NodeList_pop(&ancestors);
+                __update_node_height(ancestor);
+                Node** parent = ancestors.length == 0
+                                    ? &node->left
+                                    : &NodeList_get(&ancestors, ancestors.length - 1)->right;
+                *parent = __rebalance_subtree(ancestor);
             }
         }
     }
@@ -331,17 +347,166 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     }
 }
 
-// Remove a row by ID. Returns whether a value was deleted.
-bool TTree_remove(TTree* tree, ID id) {
-    Node* node;
-    size_t pos;
-    bool exists = __get_bounding(tree, id, &node, &pos);
-    if (!exists) {
-        return false;
+Node* __rebalance_after_remove(Node* node, bool* deleted) {
+    if (node->left != NULL && node->right != NULL) {
+        // Internal node, ensure min length
+        if (node->length >= NODE_MIN_LEN) {
+            *deleted = false;
+            return node;
+        }
+
+        // Steal a value from the right subtree
+        // TODO: tune capacity
+        Node* ancestors_buf[128];
+        NodeList ancestors = (NodeList){
+            .items = ancestors_buf,
+            .length = 0,
+            .capacity = sizeof(ancestors_buf) / sizeof(ancestors_buf[0]),
+        };
+        Node* child = node->right;
+        while (child->left != NULL) {
+            NodeList_append_assume_capacity(&ancestors, child);
+            child = child->left;
+        }
+        assert(child->length > 0);
+
+        node->ids[node->length] = child->ids[0];
+        memmove(&child->ids[0], &child->ids[1], (child->length - 1) * sizeof(ID));
+        node->data[node->length] = child->data[0];
+        memmove(&child->data[0], &child->data[1], (child->length - 1) * sizeof(Row));
+        node->length++;
+        child->length--;
+
+        // Rebalance the child
+        Node** parent = ancestors.length == 0
+                            ? &node->right
+                            : &NodeList_get(&ancestors, ancestors.length - 1)->left;
+        *parent = __rebalance_after_remove(child, deleted);
+        if (!*deleted) {
+            return node;
+        }
+        // A node was deleted, rebalance the nodes inbetween
+        while (ancestors.length > 0) {
+            Node* ancestor = NodeList_pop(&ancestors);
+            __update_node_height(ancestor);
+            parent = ancestors.length == 0 ? &node->right
+                                           : &NodeList_get(&ancestors, ancestors.length - 1)->left;
+            *parent = __rebalance_subtree(ancestor);
+        }
+        goto rebalance;
+    }
+    if (node->left == NULL && node->right == NULL) {
+        // Leaf node, delete if empty
+        if (node->length == 0) {
+            *deleted = true;
+            free(node);
+            return NULL;
+        }
+        *deleted = false;
+        return node;
+    }
+    // Half leaf node, try to merge with child
+    Node* child = node->left != NULL ? node->left : node->right;
+    // Balance factor cannot exceed +-1, so child must be a leaf mode
+    assert(child->left == NULL);
+    assert(child->right == NULL);
+    if (node->length + child->length > NODE_SIZE) {
+        *deleted = false;
+        return node;
     }
 
-    // TODO
-    return true;
+    // Merge child into node
+    size_t p = 0, p1 = 0, p2 = 0;
+    Node node_copy = *node;
+    while (p1 < node->length && p2 < child->length) {
+        if (node->ids[p1] < child->ids[p2]) {
+            node->ids[p] = node_copy.ids[p1];
+            node->data[p++] = node_copy.data[p1++];
+        } else {
+            node->ids[p] = child->ids[p2];
+            node->data[p++] = child->data[p2++];
+        }
+    }
+    // Copy remaining items
+    memcpy(&node->ids[p], &node_copy.ids[p1], (node->length - p1) * sizeof(ID));
+    memcpy(&node->ids[p], &child->ids[p2], (child->length - p2) * sizeof(ID));
+    memcpy(&node->data[p], &node_copy.data[p1], (node->length - p1) * sizeof(Row));
+    memcpy(&node->data[p], &child->data[p2], (child->length - p2) * sizeof(Row));
+    node->length += child->length;
+
+    *deleted = true;
+    if (node->left == child) {
+        node->left = NULL;
+    } else {
+        node->right = NULL;
+    }
+    free(child);
+
+rebalance:
+    assert(node != NULL);
+    if (*deleted) {
+        __update_node_height(node);
+        return __rebalance_subtree(node);
+    }
+    return node;
+}
+
+TTreeIter TTree_iter_start(const TTree* tree);
+bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row);
+
+// Remove a row by ID from the subtree rooted at `node`.
+// Returns the new root of the subtree.
+Node* __remove_inner(Node* node, ID id, bool* deleted, bool* out_removed) {
+    if (node == NULL) {
+        // No bounding node, this id does not exist
+        *deleted = false;
+        *out_removed = false;
+        return node;
+    }
+
+    size_t node_len = node->length;
+    assert(node_len > 0);
+    if (id < node->ids[0]) {
+        // id is too small, go left
+        node->left = __remove_inner(node->left, id, deleted, out_removed);
+        goto rebalance;
+    }
+    if (id > node->ids[node_len - 1]) {
+        // id is too big, go right
+        node->right = __remove_inner(node->right, id, deleted, out_removed);
+        goto rebalance;
+    }
+
+    // id is bounded by this node
+    size_t pos = __linear_search(node->ids, node_len, id);
+    if (pos >= NODE_SIZE || id != node->ids[pos]) {
+        // id does not exist
+        *deleted = false;
+        *out_removed = false;
+        return node;
+    }
+
+    // Remove the id and row
+    *out_removed = true;
+    memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
+    node->length--;
+    Row_destroy(&node->data[pos]);
+    memmove(&node->data[pos], &node->data[pos + 1], (node_len - pos - 1) * sizeof(Row));
+    return __rebalance_after_remove(node, deleted);
+
+rebalance:
+    if (*deleted && node != NULL) {
+        __update_node_height(node);
+        return __rebalance_subtree(node);
+    }
+    return node;
+}
+
+// Remove a row by ID. Returns whether a value was removed.
+bool TTree_remove(TTree* tree, ID id) {
+    bool deleted, removed;
+    tree->root = __remove_inner(tree->root, id, &deleted, &removed);
+    return removed;
 }
 
 // Remove and free all rows.
@@ -372,7 +537,6 @@ TTreeIter TTree_iter_start(const TTree* tree) {
     return (TTreeIter){
         .nodes = nodes,
         .pos = 0,
-        .go_right_next = true,
     };
 }
 
@@ -385,7 +549,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
 
     Node* prev = iter->nodes.items[0];
     printf("root");
-    for (int i = 1; i < iter->nodes.length; i++) {
+    for (size_t i = 1; i < iter->nodes.length; i++) {
         if (prev->left == iter->nodes.items[i]) {
             printf(" -> L");
         }
@@ -394,9 +558,9 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
         }
         prev = iter->nodes.items[i];
     }
+
     Node* node = NodeList_get(&iter->nodes, iter->nodes.length - 1);
-    printf(" | %d, %d/%d, go right %b\t ", iter->nodes.length, iter->pos, node->length,
-           iter->go_right_next);
+    printf(" | %zu, %d/%d, h: %d\t ", iter->nodes.length, iter->pos, node->length, node->height);
     *out_id = node->ids[iter->pos];
     *out_row = &node->data[iter->pos];
     if (++iter->pos < node->length) {
@@ -404,31 +568,30 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
     }
 
     iter->pos = 0;
-    if (iter->go_right_next) {
-        // Start iterating the right subtree
-        iter->go_right_next = false;
-        if (node->right != NULL) {
-            node = node->right;
-            while (node != NULL) {
-                NodeList_append(&iter->nodes, node);
-                node = node->left;
-            }
-            return true;
+    // Center finished, iterate right subtree
+    if (node->right != NULL) {
+        node = node->right;
+        while (node != NULL) {
+            NodeList_append(&iter->nodes, node);
+            node = node->left;
         }
+        return true;
     }
 
+    // Entire subtree finished, go up to continue
     while (true) {
-        Node* prev = NodeList_pop(&iter->nodes);
+        Node* node = NodeList_pop(&iter->nodes);
         // We iterated all the nodes
         if (iter->nodes.length == 0) {
             break;
         }
-        Node* current = NodeList_get(&iter->nodes, iter->nodes.length - 1);
-        // We came up from the left, do the center and then the right next
-        if (current->left == prev) {
+        Node* parent = NodeList_get(&iter->nodes, iter->nodes.length - 1);
+        // Left subtree finished, iterate center
+        if (parent->left == node) {
             break;
         }
+        // Right subtree finished, meaning this entire subtree is finished
+        // and we need to go up again
     }
-    iter->go_right_next = true;
     return true;
 }

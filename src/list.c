@@ -61,10 +61,16 @@ void TYPED(List_set)(TYPED(List) * self, size_t index, TYPE value) {
     self->items[index] = value;
 }
 
+// Append an element to the end of the list without checking capacity.
+void TYPED(List_append_assume_capacity)(TYPED(List) * self, TYPE item) {
+    assert(self->length < self->capacity);
+    self->items[self->length++] = item;
+}
+
 // Append an element to the end of the list.
 void TYPED(List_append)(TYPED(List) * self, TYPE item) {
     TYPED(List_ensure_capacity)(self, self->length + 1);
-    self->items[self->length++] = item;
+    TYPED(List_append_assume_capacity)(self, item);
 }
 
 // Pop an element from the end of the list.
