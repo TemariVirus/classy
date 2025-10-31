@@ -12,7 +12,7 @@ typedef struct {
 } Row;
 
 // Duplicate a string and its null terminator.
-char* __strdup(char* s) {
+char* __strdup(const char* s) {
     size_t len = strlen(s);
     char* copy = malloc(len + 1);
     memcpy(copy, s, len + 1);

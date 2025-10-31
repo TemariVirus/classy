@@ -354,7 +354,7 @@ bool __rebalance_after_remove_non_internal(Node** node_ptr) {
 
     // Half-leaf node, try to merge with child
     Node* child = node->left != NULL ? node->left : node->right;
-    // Balance factor cannot exceed +-1, so child must be a leaf mode
+    // Balance factor cannot exceed +-1, so child must be a leaf node
     assert(child->left == NULL && child->right == NULL);
     if (node->length + child->length > NODE_SIZE) {
         return false;
@@ -373,7 +373,9 @@ bool __rebalance_after_remove_non_internal(Node** node_ptr) {
             node->data[i_out++] = child->data[i2++];
         }
     }
-    // Copy remaining items
+    // Copy remaining items, only 0 or 1 of these pairs will run as memcpying 0 bytes does nothing.
+    // (hooray for less branching!)
+    assert((node->length - i1 == 0) || (child->length - i2 == 0));
     memcpy(&node->ids[i_out], &node_copy.ids[i1], (node->length - i1) * sizeof(ID));
     memcpy(&node->ids[i_out], &child->ids[i2], (child->length - i2) * sizeof(ID));
     memcpy(&node->data[i_out], &node_copy.data[i1], (node->length - i1) * sizeof(Row));
@@ -420,8 +422,8 @@ bool TTree_remove(TTree* tree, ID id) {
     if (node->left == NULL || node->right == NULL) {
         // Half-leaf or leaf node
         if (node_trace.length <= 1) {
-            bool deleted = __rebalance_after_remove_non_internal(&tree->root);
-            return deleted;
+            __rebalance_after_remove_non_internal(&tree->root);
+            return true;
         }
 
         node = NodeList_pop(&node_trace);
@@ -430,14 +432,14 @@ bool TTree_remove(TTree* tree, ID id) {
         bool deleted = __rebalance_after_remove_non_internal(node_ptr);
         node = parent;
         if (!deleted) {
-            return false;
+            return true;
         }
         goto rebalance;
     }
 
     // Internal node, ensure min length
     if (node->length >= NODE_MIN_LEN) {
-        return false;
+        return true;
     }
 
     // Steal a value from the right subtree
@@ -462,7 +464,7 @@ bool TTree_remove(TTree* tree, ID id) {
                            : &NodeList_get(&node_trace, node_trace.length - 1)->left;
     bool deleted = __rebalance_after_remove_non_internal(child_ptr);
     if (!deleted) {
-        return false;
+        return true;
     }
 
 rebalance:
