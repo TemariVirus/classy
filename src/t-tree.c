@@ -22,13 +22,16 @@
      / sizeof(ID))
 // TODO: tune NODE_MIN_LEN
 #define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
+// This is guaranteed to be enough for 4.94e14 students, or 144PiB of RAM.
+// T-trees follow the same height bounds as AVL trees:
+// https://en.wikipedia.org/wiki/AVL_tree#Properties
+#define NODE_TRACE_SIZE 64
 
 // Split ID from the rest of the data so that we can pack them more tightly in cache
 typedef struct Node {
     ID ids[NODE_SIZE];
     // Number of IDs in this node.
     uint8_t length;
-    // Unless you have 5.79e64TB of RAM, a u8 is enough.
     uint8_t height;
     struct Node* left;
     struct Node* right;
@@ -53,9 +56,10 @@ typedef struct {
 
 // Create an empty node.
 Node* __create_node_empty(void) {
-    // TODO: allocate in bigger blocks so that this outperforms malloc
-    // Node* node = aligned_alloc(CACHE_SIZE, sizeof(Node));
-    Node* node = malloc(sizeof(Node));
+    // TODO: allocate in bigger blocks for better performance?
+    // We align this to the cache line size so that all the important stuff
+    // is guaranteed to fit in 1 cache line.
+    Node* node = aligned_alloc(CACHE_SIZE, sizeof(Node));
     node->length = 0;
     node->height = 1;
     node->left = NULL;
@@ -230,8 +234,7 @@ void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
 // Get a row by ID. Returns NULL if not found.
 Row* TTree_get(const TTree* tree, ID id) {
     // TODO: can we not allocate this for every get?
-    // TODO: tune capacity
-    Node* node_trace_buf[64];
+    Node* node_trace_buf[NODE_TRACE_SIZE];
     NodeList node_trace = (NodeList){
         .items = node_trace_buf,
         .length = 0,
@@ -253,8 +256,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
         return;
     }
 
-    // TODO: tune capacity
-    Node* node_trace_buf[64];
+    Node* node_trace_buf[NODE_TRACE_SIZE];
     NodeList node_trace = (NodeList){
         .items = node_trace_buf,
         .length = 0,
@@ -273,12 +275,10 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     size_t node_len = node->length;
     assert(node_len > 0);
     if (node_len < NODE_SIZE) {
-        // TODO: extract insert and remove to function
         // There's space, insert it here
         memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
         node->ids[pos] = id;
         node->length++;
-        // TODO: check performance diff when rows are pointers instead of the whole thing
         memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
         node->data[pos] = Row_dupe(row);
         return;
@@ -303,7 +303,6 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     ID removed_id = node->ids[0];
     memmove(&node->ids[0], &node->ids[1], (pos - 1) * sizeof(ID));
     node->ids[pos - 1] = id;
-    // TODO: check performance diff when rows are pointers instead of the whole thing
     Row removed_row = node->data[0];
     memmove(&node->data[0], &node->data[1], (pos - 1) * sizeof(Row));
     node->data[pos - 1] = Row_dupe(row);
@@ -337,18 +336,6 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
         __update_node_height(child);
     }
 
-    // TODO: we might be able to combine this with the last line
-    // Rebalance the left subtree
-    while (node_trace.length > subtree_start) {
-        Node* ancestor = NodeList_pop(&node_trace);
-        __update_node_height(ancestor);
-        Node** parent = node_trace.length == subtree_start
-                            ? &node->left
-                            : &NodeList_get(&node_trace, node_trace.length - 1)->right;
-        *parent = __rebalance_subtree(ancestor);
-    }
-
-    // Rebalance the original node and upwards
     __rebalance_from_node_trace(tree, &node_trace);
 }
 
@@ -414,8 +401,7 @@ bool TTree_remove(TTree* tree, ID id) {
         return false;
     }
 
-    // TODO: tune capacity
-    Node* node_trace_buf[64];
+    Node* node_trace_buf[NODE_TRACE_SIZE];
     NodeList node_trace = (NodeList){
         .items = node_trace_buf,
         .length = 0,
@@ -430,7 +416,6 @@ bool TTree_remove(TTree* tree, ID id) {
 
     // Remove the id and row
     size_t node_len = node->length;
-    // TODO: extract insert and remove to function
     memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
     node->length--;
     Row_destroy(&node->data[pos]);
@@ -476,27 +461,15 @@ bool TTree_remove(TTree* tree, ID id) {
     child->length--;
 
     // Rebalance the child
-    Node** parent = node_trace.length == subtree_start
-                        ? &node->right
-                        : &NodeList_get(&node_trace, node_trace.length - 1)->left;
-    bool deleted = __rebalance_after_remove_non_internal(parent);
+    Node** child_ptr = node_trace.length == subtree_start
+                           ? &node->right
+                           : &NodeList_get(&node_trace, node_trace.length - 1)->left;
+    bool deleted = __rebalance_after_remove_non_internal(child_ptr);
     if (!deleted) {
         return false;
     }
 
-    // TODO: we might be able to combine this with the last line
-    // A node was deleted, rebalance the nodes inbetween
-    while (node_trace.length > subtree_start) {
-        Node* ancestor = NodeList_pop(&node_trace);
-        __update_node_height(ancestor);
-        parent = node_trace.length == subtree_start
-                     ? &node->right
-                     : &NodeList_get(&node_trace, node_trace.length - 1)->left;
-        *parent = __rebalance_subtree(ancestor);
-    }
-
 rebalance:
-    // Rebalance the original node and upwards
     __rebalance_from_node_trace(tree, &node_trace);
     return true;
 }
