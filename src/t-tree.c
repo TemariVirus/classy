@@ -20,7 +20,6 @@
       - sizeof(void*)              /* left pointer */                                              \
       - sizeof(void*))             /* right pointer */                                             \
      / sizeof(ID))
-// TODO: tune NODE_MIN_LEN
 #define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
 // This is guaranteed to be enough for 4.94e14 students, or 144PiB of RAM.
 // T-trees follow the same height bounds as AVL trees:
@@ -298,7 +297,6 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
         return;
     }
 
-    // TODO: choose between smallest and largest ID depending on which child is NULL
     // No more space, displace the smallest ID
     ID removed_id = node->ids[0];
     memmove(&node->ids[0], &node->ids[1], (pos - 1) * sizeof(ID));
@@ -307,12 +305,10 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     memmove(&node->data[0], &node->data[1], (pos - 1) * sizeof(Row));
     node->data[pos - 1] = Row_dupe(row);
 
-    // TODO: try insert into right subtree and measure performance diff of remove
     // Insert the removed id into the left subtree
     if (node->left == NULL) {
         node->left = __create_node_empty();
     }
-    size_t subtree_start = node_trace.length;
     Node* child = node->left;
     while (child->right != NULL) {
         NodeList_append_assume_capacity(&node_trace, child);
@@ -512,20 +508,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
         return false;
     }
 
-    Node* prev = iter->nodes.items[0];
-    printf("root");
-    for (size_t i = 1; i < iter->nodes.length; i++) {
-        if (prev->left == iter->nodes.items[i]) {
-            printf(" -> L");
-        }
-        if (prev->right == iter->nodes.items[i]) {
-            printf(" -> R");
-        }
-        prev = iter->nodes.items[i];
-    }
-
     Node* node = NodeList_get(&iter->nodes, iter->nodes.length - 1);
-    printf(" | %zu, %d/%d, h: %d\t ", iter->nodes.length, iter->pos, node->length, node->height);
     *out_id = node->ids[iter->pos];
     *out_row = &node->data[iter->pos];
     if (++iter->pos < node->length) {
