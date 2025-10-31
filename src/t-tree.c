@@ -419,7 +419,7 @@ bool TTree_remove(TTree* tree, ID id) {
 
     if (node->left == NULL || node->right == NULL) {
         // Half-leaf or leaf node
-        if (node_trace.length == 0) {
+        if (node_trace.length <= 1) {
             bool deleted = __rebalance_after_remove_non_internal(&tree->root);
             return deleted;
         }
