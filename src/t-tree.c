@@ -58,7 +58,11 @@ Node* __create_node_empty(void) {
     // TODO: allocate in bigger blocks for better performance?
     // We align this to the cache line size so that all the important stuff
     // is guaranteed to fit in 1 cache line.
+#if defined(_MSC_VER)
+    Node* node = _aligned_malloc(sizeof(Node), CACHE_SIZE);
+#else
     Node* node = aligned_alloc(CACHE_SIZE, sizeof(Node));
+#endif
     node->length = 0;
     node->height = 1;
     node->left = NULL;
