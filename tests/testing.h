@@ -48,6 +48,6 @@ unsigned int tests_passed = 0;
     } while (0)
 
 void print_test_summary(void) {
-    printf("\nTests run: %u\n", tests_run);
+    printf("\nTests run:    %u\n", tests_run);
     printf("Tests failed: %u\n", tests_run - tests_passed);
 }
