@@ -1,7 +1,6 @@
 #pragma once
 
 #include <assert.h>
-#include <malloc.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,12 +13,7 @@
 #include "row.c"
 
 #define CACHE_SIZE 64 // Assume cache line is 64B
-#define NODE_SIZE                                                                                  \
-    ((CACHE_SIZE - sizeof(uint8_t) /* length */                                                    \
-      - sizeof(uint8_t)            /* height */                                                    \
-      - sizeof(void*)              /* left pointer */                                              \
-      - sizeof(void*))             /* right pointer */                                             \
-     / sizeof(ID))
+#define NODE_SIZE 13
 #define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
 // This is guaranteed to be enough for 4.94e14 students, or 144PiB of RAM.
 // T-trees follow the same height bounds as AVL trees:
@@ -40,14 +34,21 @@ typedef struct Node {
     Row data[NODE_SIZE];
 } Node;
 
-// The TTree owns the memory (and strings) of the nodes and data.
-typedef struct {
-    Node* root;
-} TTree;
+static_assert(sizeof(Node) % CACHE_SIZE == 0, "Node size must be a multiple of cache line size");
+
+#define TYPE Node
+#define TYPED(THING) Node##THING
+#include "chunked-allocator.c"
 
 #define TYPE Node*
 #define TYPED(THING) Node##THING
 #include "list.c"
+
+// The TTree owns the memory (and strings) of the nodes and data.
+typedef struct {
+    Node* root;
+    NodeAllocator* node_allocator;
+} TTree;
 
 typedef struct {
     NodeList nodes;
@@ -55,15 +56,10 @@ typedef struct {
 } TTreeIter;
 
 // Create an empty node.
-Node* __create_node_empty(void) {
-    // TODO: allocate in bigger blocks for better performance?
-    // We align this to the cache line size so that all the important stuff
-    // is guaranteed to fit in 1 cache line.
-#if defined(_MSC_VER)
-    Node* node = _aligned_malloc(sizeof(Node), CACHE_SIZE);
-#else
-    Node* node = aligned_alloc(CACHE_SIZE, sizeof(Node));
-#endif
+Node* __create_node_empty(NodeAllocator* allocator) {
+    Node* node = NodeAllocator_alloc(allocator);
+    // Ensure the node is cache-aligned
+    assert((uintptr_t)node % CACHE_SIZE == 0);
     node->length = 0;
     node->height = 1;
     node->left = NULL;
@@ -72,8 +68,8 @@ Node* __create_node_empty(void) {
 }
 
 // Create a new node with its first row.
-Node* __create_node(ID id, const Row* row) {
-    Node* node = __create_node_empty();
+Node* __create_node(NodeAllocator* allocator, ID id, const Row* row) {
+    Node* node = __create_node_empty(allocator);
     node->ids[0] = id;
     node->length = 1;
     node->data[0] = Row_dupe(row);
@@ -104,25 +100,32 @@ static inline int8_t __node_balance(Node* node) {
 }
 
 // Create an empty TTree.
-TTree TTree_create(void) { return (TTree){.root = NULL}; }
+TTree TTree_create(void) {
+    return (TTree){
+        .root = NULL,
+        .node_allocator = NULL,
+    };
+}
 
-void __destroy_inner(Node* node) {
+void __destroy_inner(NodeAllocator* allocator, Node* node) {
     if (node == NULL) {
         return;
     }
 
-    __destroy_inner(node->left);
-    __destroy_inner(node->right);
+    __destroy_inner(allocator, node->left);
+    __destroy_inner(allocator, node->right);
     for (size_t i = 0; i < node->length; i++) {
         Row_destroy(&node->data[i]);
     }
-    free(node);
+    NodeAllocator_free(allocator, node);
 }
 
 // Remove and free all rows.
 void TTree_destroy(TTree* tree) {
-    __destroy_inner(tree->root);
+    __destroy_inner(tree->node_allocator, tree->root);
+    NodeAllocator_destroy(tree->node_allocator);
     tree->root = NULL;
+    tree->node_allocator = NULL;
 }
 
 // Perform a left rotation on the root node `node`. Returns the new root node.
@@ -274,8 +277,11 @@ Row* TTree_get(const TTree* tree, ID id) {
 
 // Insert or update a row by ID. Pointers in `row` are copied and do not need to be retained.
 void TTree_put(TTree* tree, ID id, const Row* row) {
+    if (tree->node_allocator == NULL) {
+        tree->node_allocator = NodeAllocator_create();
+    }
     if (tree->root == NULL) {
-        tree->root = __create_node(id, row);
+        tree->root = __create_node(tree->node_allocator, id, row);
         return;
     }
 
@@ -310,13 +316,13 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     // No more space, create a new node if id is out of range
     if (pos == 0) {
         assert(node->left == NULL);
-        node->left = __create_node(id, row);
+        node->left = __create_node(tree->node_allocator, id, row);
         __rebalance_from_node_trace(tree, &node_trace);
         return;
     }
     if (pos == NODE_SIZE) {
         assert(node->right == NULL);
-        node->right = __create_node(id, row);
+        node->right = __create_node(tree->node_allocator, id, row);
         __rebalance_from_node_trace(tree, &node_trace);
         return;
     }
@@ -331,7 +337,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
 
     // Insert the removed id into the left subtree
     if (node->left == NULL) {
-        node->left = __create_node_empty();
+        node->left = __create_node_empty(tree->node_allocator);
     }
     Node* child = node->left;
     while (child->right != NULL) {
@@ -350,7 +356,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     } else {
         // There is no space in the left subtree, insert it further down
         assert(child->right == NULL);
-        child->right = __create_node(removed_id, &removed_row);
+        child->right = __create_node(tree->node_allocator, removed_id, &removed_row);
         // No need to balance a half-leaf node
         assert(child->height <= 2);
         __update_node_height(child);
@@ -361,7 +367,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
 
 // Rebalance the subtree after a row was removed. note_ptr must point to a non-internal node.
 // Return whether a node was deleted.
-bool __rebalance_after_remove_non_internal(Node** node_ptr) {
+bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node_ptr) {
     Node* node = *node_ptr;
     assert(node != NULL);
     assert(node->left == NULL || node->right == NULL);
@@ -369,7 +375,7 @@ bool __rebalance_after_remove_non_internal(Node** node_ptr) {
     if (node->left == NULL && node->right == NULL) {
         // Leaf node, delete if empty
         if (node->length == 0) {
-            free(node);
+            NodeAllocator_free(allocator, node);
             *node_ptr = NULL;
             return true;
         }
@@ -410,7 +416,7 @@ bool __rebalance_after_remove_non_internal(Node** node_ptr) {
     assert(node->left == NULL || node->right == NULL);
     node->left = NULL;
     node->right = NULL;
-    free(child);
+    NodeAllocator_free(allocator, child);
 
     __update_node_height(node);
     *node_ptr = __rebalance_subtree(node);
@@ -446,14 +452,14 @@ bool TTree_remove(TTree* tree, ID id) {
     if (node->left == NULL || node->right == NULL) {
         // Half-leaf or leaf node
         if (node_trace.length <= 1) {
-            __rebalance_after_remove_non_internal(&tree->root);
+            __rebalance_after_remove_non_internal(tree->node_allocator, &tree->root);
             return true;
         }
 
         node = NodeList_pop(&node_trace);
         Node* parent = NodeList_get(&node_trace, node_trace.length - 1);
         Node** node_ptr = node == parent->left ? &parent->left : &parent->right;
-        bool deleted = __rebalance_after_remove_non_internal(node_ptr);
+        bool deleted = __rebalance_after_remove_non_internal(tree->node_allocator, node_ptr);
         node = parent;
         if (!deleted) {
             return true;
@@ -486,7 +492,7 @@ bool TTree_remove(TTree* tree, ID id) {
     Node** child_ptr = node_trace.length == subtree_start
                            ? &node->right
                            : &NodeList_get(&node_trace, node_trace.length - 1)->left;
-    bool deleted = __rebalance_after_remove_non_internal(child_ptr);
+    bool deleted = __rebalance_after_remove_non_internal(tree->node_allocator, child_ptr);
     if (!deleted) {
         return true;
     }
