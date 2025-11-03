@@ -6,14 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
-
 #include "row.c"
 
 #define CACHE_SIZE 64 // Assume cache line is 64B
-#define NODE_SIZE 13
+#define NODE_SIZE 45
 #define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
 // This is guaranteed to be enough for 4.94e14 students, or 144PiB of RAM.
 // T-trees follow the same height bounds as AVL trees:
@@ -183,24 +179,13 @@ Node* __rebalance_subtree(Node* node) {
 
 // Linear search for the position to insert `id` into the sorted array `ids` of length `end`.
 size_t __linear_search(ID* ids, size_t ids_len, ID id) {
+    // Perhaps the compiler already does it, but manually using SIMD instructions
+    // seems to make no performance difference.
     size_t pos = 0;
-
-    // Use SIMD for first 8 comparisions if possible (there are only 11)
-#if defined(__AVX2__)
-    // Add offset to convert to signed range for correct comparison
-    const __m256i offset = _mm256_set1_epi32(INT32_MIN);
-    __m256i id_vec = _mm256_set1_epi32(id + INT32_MIN);
-    __m256i ids_vec = _mm256_loadu_si256((__m256i*)ids);
-    ids_vec = _mm256_add_epi32(ids_vec, offset);
-    __m256i cmp_mask = _mm256_cmpgt_epi32(id_vec, ids_vec);
-    int mask = _mm256_movemask_ps((__m256)cmp_mask);
-    pos += __builtin_ctz((1 << 8) | ~mask);
-#endif
-
     while (pos < ids_len && id > ids[pos]) {
         pos++;
     }
-    return pos > ids_len ? ids_len : pos;
+    return pos;
 }
 
 // Sets out_pos to the position within the bounding node used for insertion of the given ID.
