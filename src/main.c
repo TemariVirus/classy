@@ -32,5 +32,7 @@ int main(void) {
                row->mark);
     }
 
+    TTree_destroy(&tree);
+
     return 0;
 }

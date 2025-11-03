@@ -105,6 +105,25 @@ static inline int8_t __node_balance(Node* node) {
 // Create an empty TTree.
 TTree TTree_create(void) { return (TTree){.root = NULL}; }
 
+void __destroy_inner(Node* node) {
+    if (node == NULL) {
+        return;
+    }
+
+    __destroy_inner(node->left);
+    __destroy_inner(node->right);
+    for (size_t i = 0; i < node->length; i++) {
+        Row_destroy(&node->data[i]);
+    }
+    free(node);
+}
+
+// Remove and free all rows.
+void TTree_destroy(TTree* tree) {
+    __destroy_inner(tree->root);
+    tree->root = NULL;
+}
+
 // Perform a left rotation on the root node `node`. Returns the new root node.
 Node* __leftRotate(Node* node) {
     assert(node != NULL);
@@ -474,23 +493,6 @@ bool TTree_remove(TTree* tree, ID id) {
 rebalance:
     __rebalance_from_node_trace(tree, &node_trace);
     return true;
-}
-
-// Remove and free all rows.
-void TTree_remove_all(TTree* tree) {
-    Node* root = tree->root;
-    if (root == NULL) {
-        return;
-    }
-
-    // Free subtrees
-    TTree_remove_all(&(TTree){.root = root->left});
-    TTree_remove_all(&(TTree){.root = root->right});
-    // Free root
-    for (size_t i = 0; i < root->length; i++) {
-        Row_destroy(&root->data[i]);
-    }
-    free(root);
 }
 
 // Create an iterator starting at the beginning of the TTree.
