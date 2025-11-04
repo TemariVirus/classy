@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euox pipefail
 
-zig cc -std=c17 -Wall -Wextra -Wpedantic -o run-tests.o tests/main.c
-./run-tests.o
+mkdir -p out
+zig cc -std=c17 -Wall -Wextra -Wpedantic -o out/run-tests tests/main.c
+./out/run-tests
