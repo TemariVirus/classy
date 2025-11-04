@@ -14,7 +14,7 @@ unsigned int tests_passed = 0;
 #define EXPECT(expected)                                                                           \
     do {                                                                                           \
         if (!(expected)) {                                                                         \
-            printf("\nFailed test \"%s\": Expected %s\n", test_name, #expected);                   \
+            printf("\nFailed test \"%s\": Expected %s to be true\n", test_name, #expected);        \
             return;                                                                                \
         }                                                                                          \
     } while (0)
@@ -22,7 +22,7 @@ unsigned int tests_passed = 0;
 #define EXPECT_INT_EQUAL(expected, actual)                                                         \
     do {                                                                                           \
         if ((expected) != (actual)) {                                                              \
-            printf("\nFailed test \"%s\": Expected %lli, got %lli\n", test_name,                   \
+            printf("\nFailed test \"%s\": Expected %s to be %lli, got %lli\n", test_name, #actual, \
                    (unsigned long long)(expected), (unsigned long long)(actual));                  \
             return;                                                                                \
         }                                                                                          \
@@ -31,8 +31,8 @@ unsigned int tests_passed = 0;
 #define EXPECT_FLOAT_EQUAL(expected, actual)                                                       \
     do {                                                                                           \
         if ((expected) != (actual)) {                                                              \
-            printf("\nFailed test \"%s\": Expected %g, got %g\n", test_name, (double)(expected),   \
-                   (double)(actual));                                                              \
+            printf("\nFailed test \"%s\": Expected %s to be %g, got %g\n", test_name, #actual,     \
+                   (double)(expected), (double)(actual));                                          \
             return;                                                                                \
         }                                                                                          \
     } while (0)
@@ -40,7 +40,7 @@ unsigned int tests_passed = 0;
 #define EXPECT_STRING_EQUAL(expected, actual)                                                      \
     do {                                                                                           \
         if (strcmp((expected), (actual)) != 0) {                                                   \
-            printf("\nFailed test \"%s\":\n", test_name);                                          \
+            printf("\nFailed test \"%s\": %s\n", test_name, #actual);                              \
             printf("  Expected \"%s\"\n", (expected));                                             \
             printf("  Got      \"%s\"\n", (actual));                                               \
             return;                                                                                \
