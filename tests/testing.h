@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 unsigned int tests_run = 0;
@@ -50,4 +51,7 @@ unsigned int tests_passed = 0;
 void print_test_summary(void) {
     printf("\nTests run:    %u\n", tests_run);
     printf("Tests failed: %u\n", tests_run - tests_passed);
+    if (tests_run != tests_passed) {
+        exit(1);
+    }
 }
