@@ -1,8 +1,23 @@
 #pragma once
 
-#include "../src/t-tree.h"
+#include <stddef.h>
+#include <stdlib.h>
+
 #include "../src/chunked-allocator.h"
+#include "../src/t-tree.h"
 #include "testing.h"
+
+int id_compare(const void* a, const void* b) {
+    ID id_a = *(const ID*)a;
+    ID id_b = *(const ID*)b;
+    if (id_a < id_b) {
+        return -1;
+    } else if (id_a > id_b) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
 Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {
     Node* node = __create_node_empty(allocator);
@@ -11,10 +26,16 @@ Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {
     return node;
 }
 
+void mix_id(ID* id) {
+    *id ^= (*id << 13);
+    *id ^= (*id >> 17);
+    *id ^= (*id << 5);
+}
+
 void ttree_insert(void) {
     START_TEST("T-tree insert");
 
-    const int ROW_COUNT = 100;
+    const int ROW_COUNT = 1000;
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
@@ -40,7 +61,7 @@ void ttree_insert(void) {
 void ttree_remove(void) {
     START_TEST("T-tree remove");
 
-    const int ROW_COUNT = 100;
+    const int ROW_COUNT = 1000;
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
@@ -61,6 +82,55 @@ void ttree_remove(void) {
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("6969", row->programme);
         EXPECT_FLOAT_EQUAL(i, row->mark);
+    }
+    EXPECT(!TTree_iter_next(&it, &id, &row));
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
+
+void ttree_remove_random(void) {
+    START_TEST("T-tree remove random");
+
+    const int ROW_COUNT = 1000;
+    // Seed chosen to not produce any collisions
+    const ID id_seed = 0x6942067D;
+    TTree tree = TTree_create();
+
+    ID id = id_seed;
+    for (int i = 0; i < ROW_COUNT; i++) {
+        mix_id(&id);
+        TTree_put(&tree, id, &(Row){.name = "", .programme = "6969", .mark = id});
+    }
+    // Remove every other ID
+    id = id_seed;
+    for (int i = 0; i < ROW_COUNT / 2; i++) {
+        mix_id(&id);
+        mix_id(&id);
+        // Try removing twice to test idempotency
+        TTree_remove(&tree, id);
+        TTree_remove(&tree, id);
+    }
+
+    ID expected_ids[ROW_COUNT / 2];
+    id = id_seed;
+    for (int i = 1; i < ROW_COUNT; i += 2) {
+        mix_id(&id);
+        expected_ids[i / 2] = id;
+        mix_id(&id);
+    }
+    qsort(expected_ids, ROW_COUNT / 2, sizeof(ID), id_compare);
+
+    TTreeIter it = TTree_iter_start(&tree);
+    Row* row;
+    // Check every other ID
+    for (int i = 0; i < ROW_COUNT / 2; i++) {
+        ID expected_id = expected_ids[i];
+        EXPECT(TTree_iter_next(&it, &id, &row));
+        EXPECT_INT_EQUAL(expected_id, id);
+        EXPECT_STRING_EQUAL("", row->name);
+        EXPECT_STRING_EQUAL("6969", row->programme);
+        EXPECT_FLOAT_EQUAL(expected_id, row->mark);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 

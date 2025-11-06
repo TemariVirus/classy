@@ -5,6 +5,7 @@
 int main(void) {
     ttree_insert();
     ttree_remove();
+    ttree_remove_random();
     ttree_rebalance();
     ttree_remove_empty();
     ttree_iter_empty();
