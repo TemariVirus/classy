@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../src/t-tree.c"
-#include "../src/chunked-allocator.c"
+#include "../src/t-tree.h"
+#include "../src/chunked-allocator.h"
 #include "testing.h"
 
 Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {

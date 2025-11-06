@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "row.c"
-#include "t-tree.c"
-#include <malloc.h>
+#include "row.h"
+#include "t-tree.h"
 
 int main(void) {
     TTree tree = TTree_create();

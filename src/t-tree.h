@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "row.c"
+#include "row.h"
 
 #define CACHE_SIZE 64 // Assume cache line is 64B
 #define NODE_SIZE 45
@@ -34,11 +34,11 @@ static_assert(sizeof(Node) % CACHE_SIZE == 0, "Node size must be a multiple of c
 
 #define TYPE Node
 #define TYPED(THING) Node##THING
-#include "chunked-allocator.c"
+#include "chunked-allocator.h"
 
 #define TYPE Node*
 #define TYPED(THING) Node##THING
-#include "list.c"
+#include "list.h"
 
 // The TTree owns the memory (and strings) of the nodes and data.
 typedef struct {

@@ -4,7 +4,6 @@
  * Can only allocate a single fixed size.
  */
 
-#include "t-tree.c"
 #ifdef TYPE
 
 #include <assert.h>
