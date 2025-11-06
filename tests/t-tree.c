@@ -1,7 +1,15 @@
 #pragma once
 
 #include "../src/t-tree.c"
+#include "../src/chunked-allocator.c"
 #include "testing.h"
+
+Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {
+    Node* node = __create_node_empty(allocator);
+    node->length = 1;
+    node->height = height;
+    return node;
+}
 
 void ttree_insert(void) {
     START_TEST("T-tree insert");
@@ -25,6 +33,7 @@ void ttree_insert(void) {
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
+    TTree_destroy(&tree);
     END_TEST();
 }
 
@@ -55,29 +64,24 @@ void ttree_remove(void) {
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
+    TTree_destroy(&tree);
     END_TEST();
-}
-
-Node* create_fake_node(uint8_t height) {
-    Node* node = __create_node_empty();
-    node->length = 1;
-    node->height = height;
-    return node;
 }
 
 void ttree_rebalance(void) {
     START_TEST("T-tree rebalance");
 
     TTree tree = TTree_create();
+    tree.node_allocator = NodeAllocator_create();
 
-    tree.root = create_fake_node(4);
-    tree.root->left = create_fake_node(3);
-    tree.root->left->right = create_fake_node(2);
-    tree.root->left->right->left = create_fake_node(1);
-    tree.root->right = create_fake_node(3);
-    tree.root->right->right = create_fake_node(2);
-    tree.root->right->right->left = create_fake_node(1);
-    tree.root->right->right->right = create_fake_node(1);
+    tree.root = create_fake_node(tree.node_allocator, 4);
+    tree.root->left = create_fake_node(tree.node_allocator, 3);
+    tree.root->left->right = create_fake_node(tree.node_allocator, 2);
+    tree.root->left->right->left = create_fake_node(tree.node_allocator, 1);
+    tree.root->right = create_fake_node(tree.node_allocator, 3);
+    tree.root->right->right = create_fake_node(tree.node_allocator, 2);
+    tree.root->right->right->left = create_fake_node(tree.node_allocator, 1);
+    tree.root->right->right->right = create_fake_node(tree.node_allocator, 1);
 
     // Rebalance left subtree
     tree.root->left->right = __rebalance_subtree(tree.root->left->right);
@@ -100,6 +104,7 @@ void ttree_rebalance(void) {
         EXPECT(balance <= 1);
     }
 
+    // We can't call TTree_destroy here because it will fail to free the fake rows.
     END_TEST();
 }
 
@@ -111,6 +116,7 @@ void ttree_remove_empty(void) {
     TTree_remove(&tree, 42);
     EXPECT(tree.root == NULL);
 
+    TTree_destroy(&tree);
     END_TEST();
 }
 
@@ -124,5 +130,6 @@ void ttree_iter_empty(void) {
     Row* row;
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
+    TTree_destroy(&tree);
     END_TEST();
 }

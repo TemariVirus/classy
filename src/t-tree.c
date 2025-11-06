@@ -118,8 +118,10 @@ void __destroy_inner(NodeAllocator* allocator, Node* node) {
 
 // Remove and free all rows.
 void TTree_destroy(TTree* tree) {
-    __destroy_inner(tree->node_allocator, tree->root);
-    NodeAllocator_destroy(tree->node_allocator);
+    if (tree->node_allocator != NULL) {
+        __destroy_inner(tree->node_allocator, tree->root);
+        NodeAllocator_destroy(tree->node_allocator);
+    }
     tree->root = NULL;
     tree->node_allocator = NULL;
 }
