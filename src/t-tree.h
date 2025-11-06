@@ -26,8 +26,6 @@ typedef struct Node {
     // Copy of the last ID to reduce cache misses during search.
     ID last;
     ID ids[NODE_SIZE];
-    // TODO: make this an array of pointers to copy less and check performance diff
-    // TODO: make this an intrusive linked list and check performance diff
     // data must come last so that everything else is cache-aligned.
     Row data[NODE_SIZE];
 } Node;
