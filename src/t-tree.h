@@ -9,7 +9,7 @@
 #include "row.h"
 
 #define CACHE_SIZE 64 // Assume cache line is 64B
-#define NODE_SIZE 45
+#define NODE_SIZE 38
 #define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
 // This is guaranteed to be enough for 4.94e14 students, or 144PiB of RAM.
 // T-trees follow the same height bounds as AVL trees:
@@ -18,12 +18,14 @@
 
 // Split ID from the rest of the data so that we can pack them more tightly in cache
 typedef struct Node {
-    ID ids[NODE_SIZE];
+    struct Node* left;
+    struct Node* right;
     // Number of IDs in this node.
     uint8_t length;
     uint8_t height;
-    struct Node* left;
-    struct Node* right;
+    // Copy of the last ID to reduce cache misses during search.
+    ID last;
+    ID ids[NODE_SIZE];
     // TODO: make this an array of pointers to copy less and check performance diff
     // TODO: make this an intrusive linked list and check performance diff
     // data must come last so that everything else is cache-aligned.
@@ -66,12 +68,14 @@ Node* __create_node_empty(NodeAllocator* allocator) {
 // Create a new node with its first row.
 Node* __create_node(NodeAllocator* allocator, ID id, const Row* row) {
     Node* node = __create_node_empty(allocator);
+    node->last = id;
     node->ids[0] = id;
     node->length = 1;
     node->data[0] = Row_dupe(row);
     return node;
 }
 
+// Get the height of the node.
 static inline uint8_t __node_height(Node* node) {
     if (node == NULL) {
         return 0;
@@ -79,6 +83,7 @@ static inline uint8_t __node_height(Node* node) {
     return node->height;
 }
 
+// Update the height of the node. The height of the children must be correct.
 static inline void __update_node_height(Node* node) {
     if (node == NULL) {
         return;
@@ -88,11 +93,52 @@ static inline void __update_node_height(Node* node) {
     node->height = 1 + (left_height > right_height ? left_height : right_height);
 }
 
+// The balance factor of the node.
 static inline int8_t __node_balance(Node* node) {
     if (node == NULL) {
         return 0;
     }
     return __node_height(node->left) - __node_height(node->right);
+}
+
+// Insert an ID and Row into the node at position pos.
+void __node_insert(Node* node, uint8_t pos, ID id, Row row) {
+    uint8_t node_len = node->length++;
+    assert(pos <= node_len);
+    assert(node_len < NODE_SIZE);
+
+    memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
+    node->ids[pos] = id;
+    node->last = node->ids[node_len];
+    memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
+    node->data[pos] = row;
+}
+
+// Remove an ID and Row from the node at position pos, writing them to out_id and out_row.
+void __node_remove(Node* node, uint8_t pos, ID* out_id, Row* out_row) {
+    uint8_t node_len = node->length--;
+    assert(pos < node_len);
+
+    *out_id = node->ids[pos];
+    memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
+    node->last = node->ids[node->length > 0 ? node->length - 1 : node->length];
+    *out_row = node->data[pos];
+    memmove(&node->data[pos], &node->data[pos + 1], (node_len - pos - 1) * sizeof(Row));
+}
+
+// Removes the first ID and Row from the node, and inserts the given ID and Row at position pos.
+void __node_insert_removing_first(Node* node, uint8_t pos, ID id, Row row, ID* out_id,
+                                  Row* out_row) {
+    // The compiler doesn't seem to optimise an insert followed by a remove,
+    // so we have to do it ourselves.
+    assert(pos > 0 && pos < node->length);
+
+    *out_id = node->ids[0];
+    memmove(&node->ids[0], &node->ids[1], (pos - 1) * sizeof(ID));
+    node->ids[pos - 1] = id;
+    *out_row = node->data[0];
+    memmove(&node->data[0], &node->data[1], (pos - 1) * sizeof(Row));
+    node->data[pos - 1] = row;
 }
 
 // Create an empty TTree.
@@ -203,14 +249,14 @@ bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t* out_p
         NodeList_append_assume_capacity(out_nodes, node);
         size_t node_len = node->length;
         assert(node_len > 0);
+        // id is too big, go right
+        if (id > node->last) {
+            node = node->right;
+            continue;
+        }
         // id is too small, go left
         if (id < node->ids[0]) {
             node = node->left;
-            continue;
-        }
-        // id is too big, go right
-        if (id > node->ids[node_len - 1]) {
-            node = node->right;
             continue;
         }
 
@@ -228,6 +274,7 @@ bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t* out_p
     return false;
 }
 
+// Backtrack the node trace to re-balance the tree bottom-up.
 void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
     assert(node_trace->length > 0);
     // Node was added/deleted, balance the tree again
@@ -292,11 +339,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     assert(node_len > 0);
     if (node_len < NODE_SIZE) {
         // There's space, insert it here
-        memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
-        node->ids[pos] = id;
-        node->length++;
-        memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
-        node->data[pos] = Row_dupe(row);
+        __node_insert(node, pos, id, Row_dupe(row));
         return;
     }
 
@@ -315,12 +358,9 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     }
 
     // No more space, displace the smallest ID
-    ID removed_id = node->ids[0];
-    memmove(&node->ids[0], &node->ids[1], (pos - 1) * sizeof(ID));
-    node->ids[pos - 1] = id;
-    Row removed_row = node->data[0];
-    memmove(&node->data[0], &node->data[1], (pos - 1) * sizeof(Row));
-    node->data[pos - 1] = Row_dupe(row);
+    ID removed_id;
+    Row removed_row;
+    __node_insert_removing_first(node, pos, id, Row_dupe(row), &removed_id, &removed_row);
 
     // Insert the removed id into the left subtree
     if (node->left == NULL) {
@@ -334,8 +374,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
 
     if (child->length < NODE_SIZE) {
         // We have space, insert it
-        child->ids[child->length] = removed_id;
-        child->data[child->length++] = removed_row;
+        __node_insert(child, child->length, removed_id, removed_row);
         if (child->length > 1) {
             // No new node created, no need to rebalance
             return;
@@ -398,6 +437,7 @@ bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node
     memcpy(&node->data[i_out], &node_copy.data[i1], (node->length - i1) * sizeof(Row));
     memcpy(&node->data[i_out], &child->data[i2], (child->length - i2) * sizeof(Row));
     node->length += child->length;
+    node->last = node_copy.last > child->last ? node_copy.last : child->last;
 
     // We're deleting the only child, so we can avoid branching here
     assert(node->left == NULL || node->right == NULL);
@@ -430,11 +470,12 @@ bool TTree_remove(TTree* tree, ID id) {
     }
 
     // Remove the id and row
-    size_t node_len = node->length;
-    memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
-    node->length--;
-    Row_destroy(&node->data[pos]);
-    memmove(&node->data[pos], &node->data[pos + 1], (node_len - pos - 1) * sizeof(Row));
+    {
+        ID removed_id;
+        Row removed_row;
+        __node_remove(node, pos, &removed_id, &removed_row);
+        Row_destroy(&removed_row);
+    }
 
     if (node->left == NULL || node->right == NULL) {
         // Half-leaf or leaf node
@@ -468,12 +509,10 @@ bool TTree_remove(TTree* tree, ID id) {
     }
     assert(child->length > 0);
 
-    node->ids[node->length] = child->ids[0];
-    memmove(&child->ids[0], &child->ids[1], (child->length - 1) * sizeof(ID));
-    node->data[node->length] = child->data[0];
-    memmove(&child->data[0], &child->data[1], (child->length - 1) * sizeof(Row));
-    node->length++;
-    child->length--;
+    ID removed_id;
+    Row removed_row;
+    __node_remove(child, 0, &removed_id, &removed_row);
+    __node_insert(node, node->length, removed_id, removed_row);
 
     // Rebalance the child
     Node** child_ptr = node_trace.length == subtree_start
