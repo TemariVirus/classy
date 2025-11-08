@@ -55,10 +55,11 @@ Displays all rows in the active database that satisfy `condition`.
 
 `condition` may be composed of the following operations (ordered by highest to lowest precedence):
 
-- integer, float, and string equality (a = b)
-- integer and float greater than (a > b)
-- integer and float less than (a < b)
-- string contains (sub IN str)
+- integer, float, and string equality (column = x)
+- integer and float greater than (column > x)
+- integer and float less than (column < x)
+- string contains (x IN column)
+- boolean not (NOT a)
 - boolean and (a AND b)
 - boolean or (a OR b)
 
@@ -68,7 +69,7 @@ Examples:
 
 ```plain
 QUERY ID=12345
-QUERY (Mark > 50 OR Programme = "Computer Science") AND "Alice \"in\" Wonderland" IN Name
+QUERY (Mark > 50.6 OR NOT Programme = "Computer Science") AND "Alice \"in\" Wonderland" IN Name
 ```
 
 ### SHOW SUMMARY
@@ -81,10 +82,12 @@ Displays a summary of all rows in the active database that satisfy `condition`.
 
 `condition` is as defined in `QUERY`.
 
+If condition is not given, all rows in the active database are used.
+
 ### UPDATE
 
 ```plain
-UPDATE ID=id[ column=value]*
+UPDATE ID=id[column=value]*
 ```
 
 Updates the values of the other columns in the row with the specified `ID`, if it exists.
