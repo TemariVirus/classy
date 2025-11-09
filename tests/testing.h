@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,34 @@
 unsigned int tests_passed = 0;
 unsigned int tests_skipped = 0;
 unsigned int tests_failed = 0;
+
+#define CSI "\x1B["
+#define COLOR_RED 31
+#define COLOR_GREEN 32
+#define COLOR_YELLOW 93
+
+void print_bold(const char* fmt, ...) {
+    printf("%s1m", CSI);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    printf("%s0m", CSI);
+}
+
+void print_colored(int color, const char* fmt, ...) {
+    printf("%s%dm", CSI, color);
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    printf("%s0m", CSI);
+}
+
+void print_test_header(const char* file, int line, const char* test_name) {
+    print_bold("%s:%d", file, line);
+    printf(": in test \"%s\"\n", test_name);
+}
 
 #define START_TEST(name) const char* test_name = name;
 
@@ -28,9 +57,9 @@ unsigned int tests_failed = 0;
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
             printf("Expected true, found false\n");                                                \
-            printf("%s:%d: in test \"%s\"\n", __FILE__, __LINE__, test_name);                      \
+            print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT(%s)\n", #expected);                                                 \
-            printf("    ^\n");                                                                     \
+            print_colored(COLOR_GREEN, "    ^\n");                                                 \
             return;                                                                                \
         }                                                                                          \
     } while (0)
@@ -41,9 +70,9 @@ unsigned int tests_failed = 0;
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
             printf("Expected %lli, found %lli\n", (long long)(expected), (long long)(actual));     \
-            printf("%s:%d: in test \"%s\"\n", __FILE__, __LINE__, test_name);                      \
+            print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_INT_EQUAL(%s, %s)\n", #expected, #actual);                          \
-            printf("    ^\n");                                                                     \
+            print_colored(COLOR_GREEN, "    ^\n");                                                 \
             return;                                                                                \
         }                                                                                          \
     } while (0)
@@ -54,9 +83,9 @@ unsigned int tests_failed = 0;
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
             printf("Expected %.17g, found %.17g\n", (double)(expected), (double)(actual));         \
-            printf("%s:%d: in test \"%s\"\n", __FILE__, __LINE__, test_name);                      \
+            print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_FLOAT_EQUAL(%s, %s)\n", #expected, #actual);                        \
-            printf("    ^\n");                                                                     \
+            print_colored(COLOR_GREEN, "    ^\n");                                                 \
             return;                                                                                \
         }                                                                                          \
     } while (0)
@@ -68,17 +97,36 @@ unsigned int tests_failed = 0;
             printf("\n");                                                                          \
             printf("Expected \"%s\"\n", (expected));                                               \
             printf("Found    \"%s\"\n", (actual));                                                 \
-            printf("%s:%d: in test \"%s\"\n", __FILE__, __LINE__, test_name);                      \
+            print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_STRING_EQUAL(%s, %s)\n", #expected, #actual);                       \
+            print_colored(COLOR_GREEN, "    ^\n");                                                 \
             return;                                                                                \
         }                                                                                          \
     } while (0)
 
 void print_test_summary(void) {
     printf("\n");
-    printf("Tests passed:  %u\n", tests_passed);
-    printf("Tests skipped: %u\n", tests_skipped);
-    printf("Tests failed:  %u\n", tests_failed);
+    printf("Tests passed:  ");
+    if (tests_failed == 0) {
+        print_colored(COLOR_GREEN, "%u\n", tests_passed);
+    } else {
+        printf("%u\n", tests_passed);
+    }
+
+    printf("Tests skipped: ");
+    if (tests_skipped == 0) {
+        printf("%u\n", tests_skipped);
+    } else {
+        print_colored(COLOR_YELLOW, "%u\n", tests_skipped);
+    }
+
+    printf("Tests failed:  ");
+    if (tests_failed == 0) {
+        printf("%u\n", tests_failed);
+    } else {
+        print_colored(COLOR_RED, "%u\n", tests_failed);
+    }
+
     if (tests_failed != 0) {
         exit(1);
     }
