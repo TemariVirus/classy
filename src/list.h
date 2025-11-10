@@ -24,6 +24,15 @@ TYPED(List) TYPED(List_create)(void) {
     };
 }
 
+// Creates an empty list backed by the given buffer.
+TYPED(List) TYPED(List_from_buffer)(TYPE* buffer, size_t capacity) {
+    return (TYPED(List)){
+        .items = buffer,
+        .length = 0,
+        .capacity = capacity,
+    };
+}
+
 // Frees all elements in the list.
 void TYPED(List_destroy)(TYPED(List) * self) {
     if (self->items != NULL) {

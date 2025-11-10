@@ -74,7 +74,7 @@ Node* __create_node(NodeAllocator* allocator, ID id, const Row* row) {
 }
 
 // Get the height of the node.
-static inline uint8_t __node_height(Node* node) {
+uint8_t __node_height(Node* node) {
     if (node == NULL) {
         return 0;
     }
@@ -82,7 +82,7 @@ static inline uint8_t __node_height(Node* node) {
 }
 
 // Update the height of the node. The height of the children must be correct.
-static inline void __update_node_height(Node* node) {
+void __update_node_height(Node* node) {
     if (node == NULL) {
         return;
     }
@@ -92,7 +92,7 @@ static inline void __update_node_height(Node* node) {
 }
 
 // The balance factor of the node.
-static inline int8_t __node_balance(Node* node) {
+int8_t __node_balance(Node* node) {
     if (node == NULL) {
         return 0;
     }
@@ -101,27 +101,32 @@ static inline int8_t __node_balance(Node* node) {
 
 // Insert an ID and Row into the node at position pos.
 void __node_insert(Node* node, uint8_t pos, ID id, Row row) {
-    uint8_t node_len = node->length++;
-    assert(pos <= node_len);
-    assert(node_len < NODE_SIZE);
+    assert(pos <= node->length);
+    assert(node->length < NODE_SIZE);
 
-    memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
+    memmove(&node->ids[pos + 1], &node->ids[pos], (node->length - pos) * sizeof(ID));
     node->ids[pos] = id;
-    node->last_id = node->ids[node_len];
-    memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
+    memmove(&node->data[pos + 1], &node->data[pos], (node->length - pos) * sizeof(Row));
     node->data[pos] = row;
+
+    node->last_id = node->ids[node->length];
+    node->length++;
 }
 
 // Remove an ID and Row from the node at position pos, writing them to out_id and out_row.
 void __node_remove(Node* node, uint8_t pos, ID* out_id, Row* out_row) {
-    uint8_t node_len = node->length--;
-    assert(pos < node_len);
+    assert(pos < node->length);
+    assert(node->length > 0);
+    node->length--;
 
     *out_id = node->ids[pos];
-    memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
-    node->last_id = node->ids[node->length > 0 ? node->length - 1 : node->length];
+    memmove(&node->ids[pos], &node->ids[pos + 1], (node->length - pos) * sizeof(ID));
     *out_row = node->data[pos];
-    memmove(&node->data[pos], &node->data[pos + 1], (node_len - pos - 1) * sizeof(Row));
+    memmove(&node->data[pos], &node->data[pos + 1], (node->length - pos) * sizeof(Row));
+
+    if (node->length > 0) {
+        node->last_id = node->ids[node->length - 1];
+    }
 }
 
 // Removes the first ID and Row from the node, and inserts the given ID and Row at position pos.
@@ -235,8 +240,8 @@ size_t __linear_search(ID* ids, size_t ids_len, ID id) {
 }
 
 // Sets out_pos to the position within the bounding node used for insertion of the given ID.
-// Appends the traversed nodes to out_nodes, with the last node being the bounding node.
-// out_nodes must have enough capacity to hold the traversed nodes.
+// Appends the traversed nodes to `out_nodes`, with the first node being the root and the last node
+// being the bounding node. `out_nodes` must have enough capacity to hold the traversed nodes.
 // Returns whether the ID already exists.
 bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t* out_pos) {
     assert(tree->root != NULL);
@@ -293,11 +298,7 @@ void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
 Row* TTree_get(const TTree* tree, ID id) {
     // TODO: can we not allocate this for every get?
     Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = (NodeList){
-        .items = node_trace_buf,
-        .length = 0,
-        .capacity = sizeof(node_trace_buf) / sizeof(node_trace_buf[0]),
-    };
+    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
     if (exists) {
@@ -318,11 +319,7 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     }
 
     Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = (NodeList){
-        .items = node_trace_buf,
-        .length = 0,
-        .capacity = sizeof(node_trace_buf) / sizeof(node_trace_buf[0]),
-    };
+    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
     Node* node = NodeList_get(&node_trace, node_trace.length - 1);
@@ -389,8 +386,44 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     __rebalance_from_node_trace(tree, &node_trace);
 }
 
-// Rebalance the subtree after a row was removed. note_ptr must point to a non-internal node.
-// Return whether a node was deleted.
+// The next gap for shell sort. See `__merge_nodes`.
+uint8_t __next_gap(uint8_t gap) {
+    bool round_up = gap > 1;
+    return (gap + (uint8_t)round_up) / 2;
+}
+
+// This function is inline to give the compiler better visibility for optimisation.
+static inline void __swap(void* a, void* b, size_t size) {
+    uint8_t tmp[size];
+    memcpy(tmp, a, size);
+    memcpy(a, b, size);
+    memcpy(b, tmp, size);
+}
+
+// Merge `src` into `dst` in O(n * log(n)) time.
+void __merge_nodes(Node* dst, const Node* src) {
+    assert(dst->length + src->length <= NODE_SIZE);
+
+    memcpy(&dst->ids[dst->length], &src->ids[0], src->length * sizeof(ID));
+    memcpy(&dst->data[dst->length], &src->data[0], src->length * sizeof(Row));
+    dst->length += src->length;
+
+    // Shell sort the concatenated arrays
+    for (uint8_t gap = __next_gap(dst->length); gap > 0; gap = __next_gap(gap)) {
+        for (size_t i = 0; i + gap < dst->length; i++) {
+            size_t j = i + gap;
+            if (dst->ids[i] > dst->ids[j]) {
+                __swap(&dst->ids[i], &dst->ids[j], sizeof(ID));
+                __swap(&dst->data[i], &dst->data[j], sizeof(Row));
+            }
+        }
+    }
+
+    dst->last_id = dst->ids[dst->length - 1];
+}
+
+// Rebalance the subtree after a row was removed. note_ptr must point to a non-internal
+// (i.e., leaf or half-leaf) node. Return whether a node was deleted.
 bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node_ptr) {
     Node* node = *node_ptr;
     assert(node != NULL);
@@ -411,31 +444,10 @@ bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node
     // Balance factor cannot exceed +-1, so child must be a leaf node
     assert(child->left == NULL && child->right == NULL);
     if (node->length + child->length > NODE_SIZE) {
+        // Not enough space to merge
         return false;
     }
-
-    // TODO: is there a better way to merge 2 sorted arrays?
-    // Merge child into node
-    size_t i_out = 0, i1 = 0, i2 = 0;
-    Node node_copy = *node;
-    while (i1 < node_copy.length && i2 < child->length) {
-        if (node->ids[i1] < child->ids[i2]) {
-            node->ids[i_out] = node_copy.ids[i1];
-            node->data[i_out++] = node_copy.data[i1++];
-        } else {
-            node->ids[i_out] = child->ids[i2];
-            node->data[i_out++] = child->data[i2++];
-        }
-    }
-    // Copy remaining items, only 0 or 1 of these pairs will run as memcpying 0 bytes does nothing.
-    // (hooray for less branching!)
-    assert((node->length - i1 == 0) || (child->length - i2 == 0));
-    memcpy(&node->ids[i_out], &node_copy.ids[i1], (node_copy.length - i1) * sizeof(ID));
-    memcpy(&node->ids[i_out], &child->ids[i2], (child->length - i2) * sizeof(ID));
-    node->length = node_copy.length + child->length;
-    node->last_id = node->ids[node->length - 1];
-    memcpy(&node->data[i_out], &node_copy.data[i1], (node_copy.length - i1) * sizeof(Row));
-    memcpy(&node->data[i_out], &child->data[i2], (child->length - i2) * sizeof(Row));
+    __merge_nodes(node, child);
 
     // We're deleting the only child, so we can avoid branching here
     assert(node->left == NULL || node->right == NULL);
@@ -454,12 +466,9 @@ bool TTree_remove(TTree* tree, ID id) {
         return false;
     }
 
+    // Find the node to remove from
     Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = (NodeList){
-        .items = node_trace_buf,
-        .length = 0,
-        .capacity = sizeof(node_trace_buf) / sizeof(node_trace_buf[0]),
-    };
+    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
     Node* node = NodeList_get(&node_trace, node_trace.length - 1);
@@ -475,9 +484,11 @@ bool TTree_remove(TTree* tree, ID id) {
         Row_destroy(&removed_row);
     }
 
+    // Rebalance the tree
     if (node->left == NULL || node->right == NULL) {
-        // Half-leaf or leaf node
+        // Half-leaf or leaf node case
         if (node_trace.length <= 1) {
+            // There is only a root node
             __rebalance_after_remove_non_internal(tree->node_allocator, &tree->root);
             return true;
         }
@@ -493,22 +504,22 @@ bool TTree_remove(TTree* tree, ID id) {
         goto rebalance;
     }
 
-    // Internal node, ensure min length
+    // Internal node case, ensure min length
     if (node->length >= NODE_MIN_LEN) {
         return true;
     }
 
-    // Steal a value from the right subtree
+    // Otherwise, steal the smallest ID from the right subtree
     Node* child = node->right;
     size_t subtree_start = node_trace.length;
     while (child->left != NULL) {
         NodeList_append_assume_capacity(&node_trace, child);
         child = child->left;
     }
-    assert(child->length > 0);
 
     ID removed_id;
     Row removed_row;
+    assert(child->length > 0);
     __node_remove(child, 0, &removed_id, &removed_row);
     __node_insert(node, node->length, removed_id, removed_row);
 
