@@ -24,7 +24,7 @@ typedef struct Node {
     uint8_t length;
     uint8_t height;
     // Copy of the last ID to reduce cache misses during search.
-    ID last;
+    ID last_id;
     ID ids[NODE_SIZE];
     // data must come last so that everything else is cache-aligned.
     Row data[NODE_SIZE];
@@ -66,7 +66,7 @@ Node* __create_node_empty(NodeAllocator* allocator) {
 // Create a new node with its first row.
 Node* __create_node(NodeAllocator* allocator, ID id, const Row* row) {
     Node* node = __create_node_empty(allocator);
-    node->last = id;
+    node->last_id = id;
     node->ids[0] = id;
     node->length = 1;
     node->data[0] = Row_dupe(row);
@@ -107,7 +107,7 @@ void __node_insert(Node* node, uint8_t pos, ID id, Row row) {
 
     memmove(&node->ids[pos + 1], &node->ids[pos], (node_len - pos) * sizeof(ID));
     node->ids[pos] = id;
-    node->last = node->ids[node_len];
+    node->last_id = node->ids[node_len];
     memmove(&node->data[pos + 1], &node->data[pos], (node_len - pos) * sizeof(Row));
     node->data[pos] = row;
 }
@@ -119,7 +119,7 @@ void __node_remove(Node* node, uint8_t pos, ID* out_id, Row* out_row) {
 
     *out_id = node->ids[pos];
     memmove(&node->ids[pos], &node->ids[pos + 1], (node_len - pos - 1) * sizeof(ID));
-    node->last = node->ids[node->length > 0 ? node->length - 1 : node->length];
+    node->last_id = node->ids[node->length > 0 ? node->length - 1 : node->length];
     *out_row = node->data[pos];
     memmove(&node->data[pos], &node->data[pos + 1], (node_len - pos - 1) * sizeof(Row));
 }
@@ -248,7 +248,7 @@ bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t* out_p
         size_t node_len = node->length;
         assert(node_len > 0);
         // id is too big, go right
-        if (id > node->last) {
+        if (id > node->last_id) {
             node = node->right;
             continue;
         }
@@ -418,7 +418,7 @@ bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node
     // Merge child into node
     size_t i_out = 0, i1 = 0, i2 = 0;
     Node node_copy = *node;
-    while (i1 < node->length && i2 < child->length) {
+    while (i1 < node_copy.length && i2 < child->length) {
         if (node->ids[i1] < child->ids[i2]) {
             node->ids[i_out] = node_copy.ids[i1];
             node->data[i_out++] = node_copy.data[i1++];
@@ -430,12 +430,12 @@ bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node
     // Copy remaining items, only 0 or 1 of these pairs will run as memcpying 0 bytes does nothing.
     // (hooray for less branching!)
     assert((node->length - i1 == 0) || (child->length - i2 == 0));
-    memcpy(&node->ids[i_out], &node_copy.ids[i1], (node->length - i1) * sizeof(ID));
+    memcpy(&node->ids[i_out], &node_copy.ids[i1], (node_copy.length - i1) * sizeof(ID));
     memcpy(&node->ids[i_out], &child->ids[i2], (child->length - i2) * sizeof(ID));
-    memcpy(&node->data[i_out], &node_copy.data[i1], (node->length - i1) * sizeof(Row));
+    node->length = node_copy.length + child->length;
+    node->last_id = node->ids[node->length - 1];
+    memcpy(&node->data[i_out], &node_copy.data[i1], (node_copy.length - i1) * sizeof(Row));
     memcpy(&node->data[i_out], &child->data[i2], (child->length - i2) * sizeof(Row));
-    node->length += child->length;
-    node->last = node_copy.last > child->last ? node_copy.last : child->last;
 
     // We're deleting the only child, so we can avoid branching here
     assert(node->left == NULL || node->right == NULL);
