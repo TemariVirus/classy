@@ -448,7 +448,7 @@ void __merge_nodes(Node* dst, const Node* src) {
     dst->last_id = dst->ids[dst->length - 1];
 }
 
-// Rebalance the subtree after a row was removed. `note_ptr` must point to a non-internal
+// Rebalance the subtree after a row was removed. `node_ptr` must point to a non-internal
 // (i.e., leaf or half-leaf) node. Return whether a node was deleted.
 bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node_ptr) {
     Node* node = *node_ptr;
@@ -618,7 +618,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
         Node* parent = NodeList_get(&iter->nodes, iter->nodes.length - 1);
         if (parent->left == node) {
             // Left subtree finished, the parent contains the next largest ID.
-            // Conviniently the parent is already the last item in the list.
+            // Conveniently the parent is already the last item in the list.
             break;
         }
         // Right subtree finished, meaning the parent's subtree is also finished
