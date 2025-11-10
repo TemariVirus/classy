@@ -149,7 +149,8 @@ void ttree_remove_random(void) {
 
     const int ROW_COUNT = 1000;
     // Seed chosen to not produce any collisions
-    const ID id_seed = 0x6942067D;
+    // Confirmed by printing out the ids and piping it through `sort | uniq -d`
+    const ID id_seed = 0x69420;
     TTree tree = TTree_create();
 
     ID id = id_seed;
