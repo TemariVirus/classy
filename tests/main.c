@@ -3,6 +3,8 @@
 #include "t-tree.c"
 
 int main(void) {
+    ttree_get();
+    ttree_get_empty();
     ttree_insert();
     ttree_remove();
     ttree_remove_random();

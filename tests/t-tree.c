@@ -32,6 +32,61 @@ void mix_id(ID* id) {
     *id ^= (*id << 5);
 }
 
+void ttree_get(void) {
+    START_TEST("T-tree get");
+
+    const int ROW_COUNT = 1000;
+    TTree tree = TTree_create();
+
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        TTree_put(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+    }
+
+    {
+        Row* row = TTree_get(&tree, 0);
+        EXPECT(row != NULL);
+        EXPECT_STRING_EQUAL("test", row->name);
+        EXPECT_STRING_EQUAL("", row->programme);
+        EXPECT_FLOAT_EQUAL(0, row->mark);
+    }
+    {
+        Row* row = TTree_get(&tree, 500);
+        EXPECT(row != NULL);
+        EXPECT_STRING_EQUAL("test", row->name);
+        EXPECT_STRING_EQUAL("", row->programme);
+        EXPECT_FLOAT_EQUAL(500, row->mark);
+    }
+    {
+        Row* row = TTree_get(&tree, 999);
+        EXPECT(row != NULL);
+        EXPECT_STRING_EQUAL("test", row->name);
+        EXPECT_STRING_EQUAL("", row->programme);
+        EXPECT_FLOAT_EQUAL(999, row->mark);
+    }
+    {
+        Row* row = TTree_get(&tree, 1000);
+        EXPECT(row == NULL);
+    }
+    {
+        Row* row = TTree_get(&tree, 12345);
+        EXPECT(row == NULL);
+    }
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
+
+void ttree_get_empty(void) {
+    START_TEST("T-tree get empty");
+
+    TTree tree = TTree_create();
+    Row* row = TTree_get(&tree, 0);
+    EXPECT(row == NULL);
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
+
 void ttree_insert(void) {
     START_TEST("T-tree insert");
 
