@@ -11,6 +11,7 @@ int main(void) {
     ttree_rebalance();
     ttree_remove_empty();
     ttree_iter_empty();
+    ttree_bulk_insert();
 
     print_test_summary();
     return 0;

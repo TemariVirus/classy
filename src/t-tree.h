@@ -62,12 +62,6 @@ typedef struct {
     NodeAllocator* node_allocator;
 } TTree;
 
-// See `TTree_iter_start` and `TTree_iter_next`.
-typedef struct {
-    NodeList nodes;
-    uint8_t pos;
-} TTreeIter;
-
 // Create an empty node.
 Node* __create_node_empty(NodeAllocator* allocator) {
     Node* node = NodeAllocator_alloc(allocator);
@@ -164,7 +158,7 @@ void __node_insert_removing_first(Node* node, uint8_t pos, ID id, Row row, ID* o
 TTree TTree_create(void) {
     return (TTree){
         .root = NULL,
-        .node_allocator = NULL,
+        .node_allocator = NodeAllocator_create(),
     };
 }
 
@@ -334,9 +328,7 @@ Row* TTree_get(const TTree* tree, ID id) {
 
 // Insert or update a row by ID. Pointers in `row` are copied and do not need to be retained.
 void TTree_put(TTree* tree, ID id, const Row* row) {
-    if (tree->node_allocator == NULL) {
-        tree->node_allocator = NodeAllocator_create();
-    }
+    assert(tree->node_allocator != NULL);
     if (tree->root == NULL) {
         tree->root = __create_node(tree->node_allocator, id, row);
         return;
@@ -536,9 +528,16 @@ rebalance:
     return true;
 }
 
+// See `TTree_iter_start` and `TTree_iter_next`.
+typedef struct {
+    NodeList nodes;
+    uint8_t pos;
+} TTreeIter;
+
 // Create an iterator starting at the beginning of the TTree.
 // Use TTree_iter_next to advance the iterator.
 // Values are iterated in ascending order of ID.
+// The iterator is invalidated if the TTree is modified.
 TTreeIter TTree_iter_start(const TTree* tree) {
     NodeList nodes = NodeList_create();
     Node* node = tree->root;
@@ -598,4 +597,73 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
         // and we need to go up again
     }
     return true;
+}
+
+// Contains the state of a bulk insert operation.
+typedef struct {
+    Node* current;
+    TTree tree;
+} TTreeBulkInsert;
+
+// Begin a bulk insert operation on a new TTree.
+// IDs must be inserted in strictly ascending order.
+// This is faster than calling `TTree_put` in a loop.
+//
+// `TTree_bulk_insert_end` must be called after all inserts are done.
+TTreeBulkInsert TTree_bulk_insert_start(void) {
+    return (TTreeBulkInsert){
+        .current = NULL,
+        .tree = TTree_create(),
+    };
+}
+
+void __bulk_insert_finish_node(Node* node, TTree* tree) {
+    assert(node->length > 0);
+    node->last_id = node->ids[node->length - 1];
+    if (tree->root == NULL) {
+        tree->root = node;
+        return;
+    }
+
+    Node* node_trace_buf[NODE_TRACE_SIZE];
+    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
+    // Get the node with the largest ID, which is all the way to the right
+    Node* trace = tree->root;
+    while (trace != NULL) {
+        NodeList_append_assume_capacity(&node_trace, trace);
+        trace = trace->right;
+    }
+
+    Node* parent = NodeList_get(&node_trace, node_trace.length - 1);
+    assert(parent->last_id < node->ids[0]);
+    parent->right = node;
+    __rebalance_from_node_trace(tree, &node_trace);
+}
+
+// Insert a new id and row as part of a bulk insert operation.
+// `id` must be larger than all previously inserted IDs.
+void TTree_bulk_insert(TTreeBulkInsert* bulk, ID id, Row* row) {
+    assert(bulk->tree.node_allocator != NULL);
+    if (bulk->current == NULL) {
+        bulk->current = __create_node(bulk->tree.node_allocator, id, row);
+        return;
+    }
+
+    Node* node = bulk->current;
+    assert(node->ids[node->length - 1] < id);
+    node->ids[node->length] = id;
+    node->data[node->length] = Row_dupe(row);
+    node->length++;
+    if (node->length == NODE_SIZE) {
+        __bulk_insert_finish_node(node, &bulk->tree);
+        bulk->current = NULL;
+    }
+}
+
+// Finish a bulk insert operation and return the resulting TTree.
+TTree TTree_bulk_insert_end(TTreeBulkInsert* bulk) {
+    if (bulk->current != NULL) {
+        __bulk_insert_finish_node(bulk->current, &bulk->tree);
+    }
+    return bulk->tree;
 }

@@ -259,3 +259,30 @@ TEST ttree_iter_empty(void) {
     TTree_destroy(&tree);
     END_TEST();
 }
+
+TEST ttree_bulk_insert(void) {
+    START_TEST("T-tree bulk insert");
+
+    const int ROW_COUNT = 1000;
+    TTreeBulkInsert bulk = TTree_bulk_insert_start();
+
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        TTree_bulk_insert(&bulk, i, &(Row){.name = "", .programme = "test", .mark = i});
+    }
+    TTree tree = TTree_bulk_insert_end(&bulk);
+
+    TTreeIter it = TTree_iter_start(&tree);
+    ID id;
+    Row* row;
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        EXPECT(TTree_iter_next(&it, &id, &row));
+        EXPECT_INT_EQUAL(i, id);
+        EXPECT_STRING_EQUAL("", row->name);
+        EXPECT_STRING_EQUAL("test", row->programme);
+        EXPECT_FLOAT_EQUAL(i, row->mark);
+    }
+    EXPECT(!TTree_iter_next(&it, &id, &row));
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
