@@ -412,42 +412,6 @@ void TTree_put(TTree* tree, ID id, const Row* row) {
     __rebalance_from_node_trace(tree, &node_trace);
 }
 
-// The next gap for shell sort. See `__merge_nodes`.
-uint8_t __next_gap(uint8_t gap) {
-    bool round_up = gap > 1;
-    return (gap + (uint8_t)round_up) / 2;
-}
-
-// This function is inline to give the compiler better visibility for optimisation.
-static inline void __swap(void* a, void* b, size_t size) {
-    uint8_t tmp[size];
-    memcpy(tmp, a, size);
-    memcpy(a, b, size);
-    memcpy(b, tmp, size);
-}
-
-// Merge `src` into `dst` in O(n * log(n)) time.
-void __merge_nodes(Node* dst, const Node* src) {
-    assert(dst->length + src->length <= NODE_SIZE);
-
-    memcpy(&dst->ids[dst->length], &src->ids[0], src->length * sizeof(ID));
-    memcpy(&dst->data[dst->length], &src->data[0], src->length * sizeof(Row));
-    dst->length += src->length;
-
-    // Shell sort the concatenated arrays
-    for (uint8_t gap = __next_gap(dst->length); gap > 0; gap = __next_gap(gap)) {
-        for (size_t i = 0; i + gap < dst->length; i++) {
-            size_t j = i + gap;
-            if (dst->ids[i] > dst->ids[j]) {
-                __swap(&dst->ids[i], &dst->ids[j], sizeof(ID));
-                __swap(&dst->data[i], &dst->data[j], sizeof(Row));
-            }
-        }
-    }
-
-    dst->last_id = dst->ids[dst->length - 1];
-}
-
 // Rebalance the subtree after a row was removed. `node_ptr` must point to a non-internal
 // (i.e., leaf or half-leaf) node. Return whether a node was deleted.
 bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node_ptr) {
@@ -473,10 +437,19 @@ bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node
         // Not enough space to merge
         return false;
     }
-    __merge_nodes(node, child);
+    // Merge child into node
+    if (child == node->left) {
+        // Make node the one with the smaller IDs
+        *node_ptr = child;
+        child = node;
+        node = *node_ptr;
+    }
+    memcpy(&node->ids[node->length], &child->ids[0], child->length * sizeof(ID));
+    memcpy(&node->data[node->length], &child->data[0], child->length * sizeof(Row));
+    node->length += child->length;
+    node->last_id = node->ids[node->length - 1];
 
-    // We're deleting the only child, so we can avoid branching here
-    assert(node->left == NULL || node->right == NULL);
+    // We deleted the only child, this is now a leaf node
     node->left = NULL;
     node->right = NULL;
     NodeAllocator_free(allocator, child);
