@@ -181,7 +181,7 @@ void __destroy_inner(NodeAllocator* allocator, Node* node) {
     NodeAllocator_free(allocator, node);
 }
 
-// Remove and free all rows.
+// Remove and free all rows. The T-tree may be reused after calling this.
 void TTree_destroy(TTree* tree) {
     if (tree == NULL) {
         return;
