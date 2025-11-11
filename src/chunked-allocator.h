@@ -1,8 +1,6 @@
-/*
- * Chunked allocator with O(1) average alloc and free time.
- * Worse case alloc/free time matches that of the underlying malloc/free.
- * Can only allocate a single fixed size.
- */
+// Chunked allocator with O(1) average alloc and free time.
+// Worse case alloc/free time matches that of the underlying malloc/free.
+// Can only allocate a single fixed size.
 
 #ifdef TYPE
 
@@ -28,7 +26,9 @@ static_assert(sizeof(TYPE) >= sizeof(uint32_t),
 typedef struct Chunk {
     // Aligned to CHUNK_SIZE for fast pointer to chunk lookup
     TYPE memory[CHUNK_CAPACITY];
+    // Head of the free list (index into `memory`)
     uint32_t free_list;
+    // Number of used items in `memory`
     uint32_t used_count;
     struct Chunk* prev;
     struct Chunk* next;
@@ -57,6 +57,7 @@ void TYPED(Allocator_destroy)(Allocator* allocator) {
     free(allocator);
 }
 
+// Prepend a chunk to the linked list.
 void TYPED(__list_prepend)(Chunk** list, Chunk* chunk) {
     chunk->prev = NULL;
     chunk->next = *list;
@@ -66,6 +67,7 @@ void TYPED(__list_prepend)(Chunk** list, Chunk* chunk) {
     *list = chunk;
 }
 
+// Remove a chunk from the linked list.
 void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
     if (chunk->prev != NULL) {
         chunk->prev->next = chunk->next;
@@ -80,6 +82,7 @@ void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
     chunk->next = NULL;
 }
 
+// Allocate a new item from the allocator.
 TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
     if (allocator->free_chunks == NULL) {
         // We need to allocate a new chunk
@@ -105,7 +108,8 @@ TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
 
     // Allocate from the first free chunk
     Chunk* chunk = allocator->free_chunks;
-    assert(chunk->free_list >= 0);
+    assert(chunk->used_count < CHUNK_CAPACITY);
+    // This address holds the next free index from the free list
     TYPE* item = &chunk->memory[chunk->free_list];
     uint32_t next_index = *(uint32_t*)item;
     chunk->free_list = next_index;
@@ -119,17 +123,19 @@ TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
     return item;
 }
 
+// Free an item back to the allocator.
 void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
     if (ptr == NULL) {
         return;
     }
 
+    // Each chunk is aligned to CHUNK_SIZE
     Chunk* chunk = (Chunk*)((uintptr_t)ptr & CHUNK_MASK);
     bool was_full = (chunk->used_count == CHUNK_CAPACITY);
 
     // Add the item back to the free list
-    int32_t index = (int32_t)(ptr - chunk->memory);
-    *(int32_t*)ptr = chunk->free_list;
+    uint32_t index = (uint32_t)(ptr - chunk->memory);
+    *(uint32_t*)ptr = chunk->free_list;
     chunk->free_list = index;
     chunk->used_count--;
 
@@ -139,6 +145,7 @@ void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
     }
 
     if (chunk->used_count == 0) {
+        // Chunk is completely unused, free it to not hog memory
         TYPED(__list_remove)(&allocator->free_chunks, chunk);
         free(chunk);
     }
