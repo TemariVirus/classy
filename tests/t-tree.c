@@ -32,7 +32,7 @@ void mix_id(ID* id) {
     *id ^= (*id << 5);
 }
 
-void ttree_get(void) {
+TEST ttree_get(void) {
     START_TEST("T-tree get");
 
     const int ROW_COUNT = 1000;
@@ -76,7 +76,7 @@ void ttree_get(void) {
     END_TEST();
 }
 
-void ttree_get_empty(void) {
+TEST ttree_get_empty(void) {
     START_TEST("T-tree get empty");
 
     TTree tree = TTree_create();
@@ -87,7 +87,7 @@ void ttree_get_empty(void) {
     END_TEST();
 }
 
-void ttree_insert(void) {
+TEST ttree_insert(void) {
     START_TEST("T-tree insert");
 
     const int ROW_COUNT = 1000;
@@ -113,7 +113,7 @@ void ttree_insert(void) {
     END_TEST();
 }
 
-void ttree_remove(void) {
+TEST ttree_remove(void) {
     START_TEST("T-tree remove");
 
     const int ROW_COUNT = 1000;
@@ -124,7 +124,7 @@ void ttree_remove(void) {
     }
     // Remove every even ID
     for (ID i = 0; i < ROW_COUNT; i += 2) {
-        TTree_remove(&tree, i);
+        EXPECT(TTree_remove(&tree, i));
     }
 
     TTreeIter it = TTree_iter_start(&tree);
@@ -144,7 +144,7 @@ void ttree_remove(void) {
     END_TEST();
 }
 
-void ttree_remove_random(void) {
+TEST ttree_remove_random(void) {
     START_TEST("T-tree remove random");
 
     const int ROW_COUNT = 1000;
@@ -164,8 +164,8 @@ void ttree_remove_random(void) {
         mix_id(&id);
         mix_id(&id);
         // Try removing twice to test idempotency
-        TTree_remove(&tree, id);
-        TTree_remove(&tree, id);
+        EXPECT(TTree_remove(&tree, id));
+        EXPECT(!TTree_remove(&tree, id));
     }
 
     ID expected_ids[ROW_COUNT / 2];
@@ -194,7 +194,7 @@ void ttree_remove_random(void) {
     END_TEST();
 }
 
-void ttree_rebalance(void) {
+TEST ttree_rebalance(void) {
     START_TEST("T-tree rebalance");
 
     TTree tree = TTree_create();
@@ -234,19 +234,19 @@ void ttree_rebalance(void) {
     END_TEST();
 }
 
-void ttree_remove_empty(void) {
+TEST ttree_remove_empty(void) {
     START_TEST("T-tree remove empty");
 
     TTree tree = TTree_create();
-    TTree_remove(&tree, 0);
-    TTree_remove(&tree, 42);
+    EXPECT(!TTree_remove(&tree, 0));
+    EXPECT(!TTree_remove(&tree, 42));
     EXPECT(tree.root == NULL);
 
     TTree_destroy(&tree);
     END_TEST();
 }
 
-void ttree_iter_empty(void) {
+TEST ttree_iter_empty(void) {
     START_TEST("T-tree iterate empty");
 
     TTree tree = TTree_create();

@@ -37,6 +37,9 @@ void print_test_header(const char* file, int line, const char* test_name) {
     printf(": in test \"%s\"\n", test_name);
 }
 
+// Make tests static functions so that the compiler will warn about unused tests.
+#define TEST static void
+
 #define START_TEST(name) const char* test_name = name;
 
 #define END_TEST()                                                                                 \
