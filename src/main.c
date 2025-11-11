@@ -1,37 +1,48 @@
-#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-#include "row.h"
-#include "t-tree.h"
+#include "db.h"
+#include "error.h"
 
 int main(void) {
-    TTree tree = TTree_create();
-
-    uint32_t j = 0xDEADBEEF;
-    for (int i = 0; i < 1000000; i++) {
-        j ^= (j << 13);
-        j ^= (j >> 17);
-        j ^= (j << 5);
-        TTree_put(&tree, j & 0xFFFFFF, &(Row){.name = "Alice", .programme = "Math", .mark = i});
+    DB db;
+    FILE* fptr = fopen("sample-db.txt", "r");
+    if (fptr == NULL) {
+        perror("Failed to open file");
+        return EXIT_FAILURE;
+    }
+    DB_from_file__Error err = DB_from_file(fptr, &db);
+    fclose(fptr);
+    switch (err) {
+    case ERROR_OK:
+        break;
+    case ERROR_MISSING_TABLE_NAME:
+        printf("Error: Missing table name in file.\n");
+        break;
+    case ERROR_BAD_FORMAT:
+        printf("Error: Badly formatted file.\n");
+        break;
+    case ERROR_BAD_COLUMN:
+        printf("Error: Column name must be one of ID, Name, Programme, or Mark and cannot contain "
+               "duplicates.\n");
+        break;
+    case ERROR_UNORDERED_ID:
+        printf("Error: IDs in file are not in ascending order.\n");
+        break;
     }
 
-    for (int i = 0; i < 1000000; i++) {
-        j ^= (j << 13);
-        j ^= (j >> 17);
-        j ^= (j << 5);
-        TTree_remove(&tree, j & 0xFFFFFF);
-    }
+    printf("Table Name: %s\n", db.table_name);
+    printf("Row Count: %zu\n", db.row_count);
 
     ID id;
     Row* row;
-    TTreeIter it = TTree_iter_start(&tree);
+    TTreeIter it = TTree_iter_start(&db.data);
     while (TTree_iter_next(&it, &id, &row)) {
-        // Process id and row
         printf("%10i: name=%s\t programme=%s\t mark=%f\n", id, row->name, row->programme,
                row->mark);
     }
 
-    TTree_destroy(&tree);
+    DB_destroy(&db);
 
     return 0;
 }

@@ -1,10 +1,11 @@
+// A type-safe growable list with dynamic memory allocation.
+
 #ifdef TYPE
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Black magic macros for generics 🥶
 #ifndef TYPED
 #define TYPED(THING) THING
 #endif

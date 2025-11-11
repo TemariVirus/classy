@@ -664,6 +664,7 @@ void TTree_bulk_insert(TTreeBulkInsert* bulk, ID id, Row* row) {
 TTree TTree_bulk_insert_end(TTreeBulkInsert* bulk) {
     if (bulk->current != NULL) {
         __bulk_insert_finish_node(bulk->current, &bulk->tree);
+        bulk->current = NULL;
     }
     return bulk->tree;
 }
