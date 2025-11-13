@@ -1,7 +1,9 @@
 #pragma once
 
+#define __STDC_WANT_LIB_EXT2__ 1
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "string_helper.h"
 

@@ -1,17 +1,10 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
-// Duplicate a string and its null terminator.
-char* strdup(const char* s) {
-    char* copy = malloc(strlen(s) + 1);
-    if (copy == NULL) {
-        return NULL;
-    }
-    strcpy(copy, s);
-    return copy;
-}
 
 // Returns whether the string is empty.
 bool str_empty(const char* s) { return s[0] == '\0'; }

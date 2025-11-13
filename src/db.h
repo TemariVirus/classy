@@ -1,5 +1,6 @@
 #pragma once
 
+#define __STDC_WANT_LIB_EXT2__ 1
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -59,7 +60,7 @@ typedef enum {
     DB_from_file__missing_table_name = ERROR_MISSING_TABLE_NAME,
     DB_from_file__bad_format = ERROR_BAD_FORMAT,
     DB_from_file__bad_column = ERROR_BAD_COLUMN,
-    DB_from_file__unorded_id = ERROR_UNORDERED_ID,
+    DB_from_file__unordered_id = ERROR_UNORDERED_ID,
 } DB_from_file__Error;
 
 // Creates a new DB at `out_db` and inserts all rows from the file.
@@ -129,7 +130,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
                     goto error_cleanup;
                 }
                 if (row_count > 0 && id <= last_id) {
-                    err = DB_from_file__unorded_id;
+                    err = DB_from_file__unordered_id;
                     goto error_cleanup;
                 }
                 last_id = id;

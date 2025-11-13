@@ -1,5 +1,10 @@
 #pragma once
 
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
 #define COLUMN_COUNT 4
 
 typedef enum {
@@ -23,6 +28,7 @@ const char* Column_name(Column column) {
     case COLUMN_MARK:
         return "Mark";
     }
+    assert(false); // Unreachable
 }
 
 // Returns true if `name` corresponds to a valid Column, false otherwise.
