@@ -71,8 +71,12 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
 
     DB_from_file__Error err;
     TTreeBulkInsert bulk = TTree_bulk_insert_start();
-    TTree data;
     char* table_name = NULL;
+    *out_db = (DB){
+        .data = (TTree){.root = NULL, .node_allocator = NULL},
+        .row_count = 0,
+        .table_name = NULL,
+    };
 
     char line[MAX_LINE_LEN];
     // Ignore all headers
@@ -166,17 +170,17 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
         row_count++;
     }
 
-    data = TTree_bulk_insert_end(&bulk);
     *out_db = (DB){
-        .data = data,
+        .data = TTree_bulk_insert_end(&bulk),
         .row_count = row_count,
         .table_name = table_name,
     };
     return DB_from_file__ok;
 
-error_cleanup:
-    data = TTree_bulk_insert_end(&bulk);
-    TTree_destroy(&data);
+error_cleanup: {
+    TTree tree = TTree_bulk_insert_end(&bulk);
+    TTree_destroy(&tree);
     free(table_name);
     return err;
+}
 }
