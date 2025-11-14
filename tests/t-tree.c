@@ -20,7 +20,7 @@ int id_compare(const void* a, const void* b) {
 }
 
 Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {
-    Node* node = __create_node_empty(allocator);
+    Node* node = __node_create(allocator);
     node->length = 1;
     node->height = height;
     return node;

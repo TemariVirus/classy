@@ -37,7 +37,7 @@ void DB_destroy(DB* db) {
     db->table_name = NULL;
 }
 
-bool __parse_columns(char* line, Column columns[COLUMN_COUNT]) {
+static bool __parse_columns(char* line, Column columns[COLUMN_COUNT]) {
     StringSplit split = {.current = line};
     for (int i = 0; i < COLUMN_COUNT; i++) {
         char* col_name = string_split_next(&split, ',');
