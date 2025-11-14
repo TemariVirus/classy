@@ -19,6 +19,7 @@ int main(void) {
     ttree_remove_empty();
     ttree_iter_empty();
     ttree_bulk_insert();
+    ttree_bulk_insert_empty();
 
     print_test_summary();
     return 0;

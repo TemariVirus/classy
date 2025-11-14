@@ -286,3 +286,18 @@ TEST ttree_bulk_insert(void) {
     TTree_destroy(&tree);
     END_TEST();
 }
+
+TEST ttree_bulk_insert_empty(void) {
+    START_TEST("T-tree bulk insert empty");
+
+    TTreeBulkInsert bulk = TTree_bulk_insert_start();
+    TTree tree = TTree_bulk_insert_end(&bulk);
+
+    TTreeIter it = TTree_iter_start(&tree);
+    ID id;
+    Row* row;
+    EXPECT(!TTree_iter_next(&it, &id, &row));
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
