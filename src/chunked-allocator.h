@@ -42,7 +42,10 @@ typedef struct Allocator {
 // Create a new chunked allocator.
 Allocator* TYPED(Allocator_create)(void) {
     Allocator* allocator = malloc(sizeof(Allocator));
-    allocator->free_chunks = NULL;
+    *allocator = (Allocator){
+        .free_chunks = NULL,
+        .full_chunks = NULL,
+    };
     return allocator;
 }
 
