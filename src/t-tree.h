@@ -19,17 +19,18 @@
 
 #include "row.h"
 
-#define CACHE_ALIGN 64 // Assume cache line is 64B
-#define NODE_SIZE 38   // Fastest node size found empirically
+#define CACHE_ALIGN 64 // Assume a cache line is 64B
+// Maximum number of IDs in a node.
+// Fastest node size found empirically.
+#define NODE_SIZE 38
 // Minimum number of items in an internal node.
-// No significant performance difference found when tuning this.
-#define NODE_MIN_LEN ((NODE_SIZE * 3 + 3) / 4)
-// Since there are only 2^32 unique sutdent IDs, the tree will never have more than 38 levels.
+#define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
+// Since there are only 2^32 unique sutdent IDs, the tree will never have more than 39 levels.
 // T-trees follow the same height bounds as AVL trees:
 // https://en.wikipedia.org/wiki/AVL_tree#Properties
 //
-// log_phi((2^32 / NODE_MIN_LEN) + 2) + b = 38.768...
-#define NODE_TRACE_SIZE 38
+// log_phi((2^32 / NODE_MIN_LEN) + 2) - 0.3277 = 39.64...
+#define NODE_TRACE_SIZE 39
 
 // A node in the T-tree. Contains up to NODE_SIZE IDs and Rows.
 //
@@ -201,6 +202,8 @@ static void __node_insert_removing_first(Node* node, uint8_t pos, ID id, Row row
 
 // Copies `len` consecutive IDs and Rows from `src` starting at `src_start` to
 // `dst` starting at `dst_start`. Removes the copied IDs and rows from `src`.
+//
+// `dst` and `src` must not be the same node.
 static void __node_move(Node* dst, uint8_t dst_start, Node* src, uint8_t src_start, uint8_t len) {
     assert(dst_start <= dst->length);
     assert(dst_start + len <= NODE_SIZE);
@@ -230,6 +233,8 @@ static void __node_move(Node* dst, uint8_t dst_start, Node* src, uint8_t src_sta
 // Merge `right` into `left`, freeing `right`.
 // Asserts that all IDs in `left` are less than those in `right`.
 // Asserts that the combined length does not exceed NODE_SIZE.
+//
+// `left` and `right` must not be the same node.
 static void __node_merge(NodeAllocator* allocator, Node* left, Node* right) {
     assert(left->last_id < right->ids[0]);
     assert(left->length + right->length <= NODE_SIZE);
@@ -340,6 +345,57 @@ static Node* __rebalance_subtree(Node* node) {
     return node;
 }
 
+// Pop the last node from the node trace and get the parent's pointer to it.
+static Node** __pop_node_get_pointer(TTree* tree, NodeList* node_trace) {
+    Node* node = NodeList_pop(node_trace);
+    Node* parent =
+        node_trace->length == 0 ? NULL : NodeList_get(node_trace, node_trace->length - 1);
+    Node** node_ptr = parent == NULL         ? &tree->root
+                      : node == parent->left ? &parent->left
+                                             : &parent->right;
+    assert(*node_ptr == node);
+    return node_ptr;
+}
+
+// Ensure that internal nodes have at least NODE_MIN_LEN items after rebalancing.
+// Does nothing if `node` is not an internal node.
+static void __ensure_min_len_after_rebalance(Node* node) {
+    assert(node != NULL);
+    // Make sure internal nodes have at least NODE_MIN_LEN items
+    if (__node_kind(node) != NODEKIND_INTERNAL || node->length >= NODE_MIN_LEN) {
+        return;
+    }
+    // Otherwise, steal IDs from a non-internal child
+    uint8_t steal_count = NODE_MIN_LEN - node->length;
+    Node* child = (__node_kind(node->left) != NODEKIND_INTERNAL && node->left->length > steal_count)
+                      ? node->left
+                      : node->right;
+    assert(child->length > steal_count);
+    assert(__node_kind(child) != NODEKIND_INTERNAL);
+
+    if (child == node->left) {
+        __node_move(node, 0, child, child->length - steal_count, steal_count);
+    } else {
+        __node_move(node, node->length, child, 0, steal_count);
+    }
+}
+
+// Backtrack the node trace to rebalance the tree bottom-up.
+// This function ensures that the invariants of the T-tree are preserved.
+static void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
+    while (node_trace->length > 0) {
+        Node** node_ptr = __pop_node_get_pointer(tree, node_trace);
+        Node* node = *node_ptr;
+        __update_node_height(node);
+        *node_ptr = __rebalance_subtree(node);
+        if (*node_ptr != node) {
+            // Only one rebalance is needed to rebalance the whole tree
+            __ensure_min_len_after_rebalance(*node_ptr);
+            break;
+        }
+    }
+}
+
 // Linear search for the position to insert `id` into the sorted array `ids` of length `ids_len`.
 // For a NODE_SIZE of 38, this appears to be slightly faster than binary search.
 static size_t __linear_search(ID* ids, size_t ids_len, ID id) {
@@ -390,57 +446,6 @@ static bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t
     bool insert_left = id < last_node->ids[0];
     *out_pos = insert_left ? 0 : last_node->length;
     return false;
-}
-
-// Pop the last node from the node trace and get the parent's pointer to it.
-static Node** __pop_node_get_pointer(TTree* tree, NodeList* node_trace) {
-    Node* node = NodeList_pop(node_trace);
-    Node* parent =
-        node_trace->length == 0 ? NULL : NodeList_get(node_trace, node_trace->length - 1);
-    Node** node_ptr = parent == NULL         ? &tree->root
-                      : node == parent->left ? &parent->left
-                                             : &parent->right;
-    assert(*node_ptr == node);
-    return node_ptr;
-}
-
-// Ensure that internal nodes have at least NODE_MIN_LEN items after rebalancing.
-// Does nothing if `node` is not an internal node.
-static void __ensure_min_len_after_rebalance(Node* node) {
-    assert(node != NULL);
-    // Make sure internal nodes have at least NODE_MIN_LEN items
-    if (__node_kind(node) != NODEKIND_INTERNAL || node->length >= NODE_MIN_LEN) {
-        return;
-    }
-    // Otherwise, steal IDs from a non-internal child
-    uint8_t steal_count = NODE_MIN_LEN - node->length;
-    Node* child = (__node_kind(node->left) != NODEKIND_INTERNAL && node->left->length > steal_count)
-                      ? node->left
-                      : node->right;
-    assert(child->length > steal_count);
-    assert(__node_kind(child) != NODEKIND_INTERNAL);
-
-    if (child == node->left) {
-        __node_move(node, 0, child, child->length - steal_count, steal_count);
-    } else {
-        __node_move(node, node->length, child, 0, steal_count);
-    }
-}
-
-// Backtrack the node trace to rebalance the tree bottom-up.
-// This function ensures that the invariants of the T-tree are preserved.
-static void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
-    while (node_trace->length > 0) {
-        Node** node_ptr = __pop_node_get_pointer(tree, node_trace);
-        Node* node = *node_ptr;
-        __update_node_height(node);
-        *node_ptr = __rebalance_subtree(node);
-        if (*node_ptr != node) {
-            // Only one rebalance is needed to rebalance the whole tree
-            __ensure_min_len_after_rebalance(*node_ptr);
-            break;
-        }
-    }
 }
 
 // Get a row by ID. Returns NULL if not found.
