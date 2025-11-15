@@ -7,6 +7,31 @@
 #include "../src/t-tree.h"
 #include "testing.h"
 
+#define EXPECT_NODE_INVARIANTS(it)                                                                 \
+    do {                                                                                           \
+        TTreeIter iter = (it);                                                                     \
+        if (iter.nodes.length == 0) {                                                              \
+            break;                                                                                 \
+        }                                                                                          \
+        Node* node = NodeList_get(&iter.nodes, iter.nodes.length - 1);                             \
+        EXPECT(node->length > 0);                                                                  \
+        EXPECT(node->last_id == node->ids[node->length - 1]);                                      \
+        /* All IDs in a node's left subtree are less than the node's smallest ID. */               \
+        if (node->left != NULL) {                                                                  \
+            EXPECT(node->ids[0] > node->left->last_id);                                            \
+        }                                                                                          \
+        /* All IDs in a node's right subtree are greater than the node's largest ID. */            \
+        if (node->right != NULL) {                                                                 \
+            EXPECT(node->last_id < node->right->ids[0]);                                           \
+        }                                                                                          \
+        /* Internal nodes contain at least NODE_MIN_LEN items. */                                  \
+        if (__node_kind(node) == NODEKIND_INTERNAL) {                                              \
+            EXPECT(node->length >= NODE_MIN_LEN);                                                  \
+        }                                                                                          \
+        /* The height difference between a node's 2 children is at most 1. */                      \
+        EXPECT(__node_balance(node) >= -1 && __node_balance(node) <= 1);                           \
+    } while (0)
+
 int id_compare(const void* a, const void* b) {
     ID id_a = *(const ID*)a;
     ID id_b = *(const ID*)b;
@@ -39,7 +64,7 @@ TEST ttree_get(void) {
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_put(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
     }
 
     {
@@ -90,11 +115,11 @@ TEST ttree_get_empty(void) {
 TEST ttree_insert(void) {
     START_TEST("T-tree insert");
 
-    const int ROW_COUNT = 1000;
+    const int ROW_COUNT = 10000;
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_put(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
     }
 
     TTreeIter it = TTree_iter_start(&tree);
@@ -106,6 +131,7 @@ TEST ttree_insert(void) {
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
         EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
@@ -116,11 +142,11 @@ TEST ttree_insert(void) {
 TEST ttree_remove(void) {
     START_TEST("T-tree remove");
 
-    const int ROW_COUNT = 1000;
+    const int ROW_COUNT = 10000;
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_put(&tree, i, &(Row){.name = "", .programme = "6969", .mark = i});
+        TTree_insert(&tree, i, &(Row){.name = "", .programme = "6969", .mark = i});
     }
     // Remove every even ID
     for (ID i = 0; i < ROW_COUNT; i += 2) {
@@ -137,6 +163,7 @@ TEST ttree_remove(void) {
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("6969", row->programme);
         EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
@@ -147,16 +174,16 @@ TEST ttree_remove(void) {
 TEST ttree_remove_random(void) {
     START_TEST("T-tree remove random");
 
-    const int ROW_COUNT = 1000;
+    const int ROW_COUNT = 1000000;
     // Seed chosen to not produce any collisions
     // Confirmed by printing out the ids and piping it through `sort | uniq -d`
-    const ID id_seed = 0x69420;
+    const ID id_seed = 0x69421;
     TTree tree = TTree_create();
 
     ID id = id_seed;
     for (int i = 0; i < ROW_COUNT; i++) {
         mix_id(&id);
-        TTree_put(&tree, id, &(Row){.name = "", .programme = "6969", .mark = id});
+        TTree_insert(&tree, id, &(Row){.name = "", .programme = "6969", .mark = id});
     }
     // Remove every other ID
     id = id_seed;
@@ -187,6 +214,7 @@ TEST ttree_remove_random(void) {
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("6969", row->programme);
         EXPECT_FLOAT_EQUAL(expected_id, row->mark);
+        EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
@@ -263,7 +291,7 @@ TEST ttree_iter_empty(void) {
 TEST ttree_bulk_insert(void) {
     START_TEST("T-tree bulk insert");
 
-    const int ROW_COUNT = 1000;
+    const int ROW_COUNT = 50000;
     TTreeBulkInsert bulk = TTree_bulk_insert_start();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
@@ -280,6 +308,7 @@ TEST ttree_bulk_insert(void) {
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("test", row->programme);
         EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
 
