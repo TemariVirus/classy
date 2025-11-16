@@ -666,37 +666,45 @@ bool TTree_remove(TTree* tree, ID id) {
 
 // See `TTree_iter_start` and `TTree_iter_next`.
 typedef struct {
-    NodeList nodes;
+    // Stack of nodes from the root to the current node.
+    Node* node_trace[NODE_TRACE_SIZE];
+    // Number of nodes in `node_trace`.
+    uint8_t node_trace_len;
+    // Position within the current node.
     uint8_t pos;
 } TTreeIter;
 
 // Create an iterator starting at the beginning of the TTree.
-// Use TTree_iter_next to advance the iterator.
+// Use `TTree_iter_next` to advance the iterator.
 // Values are iterated in ascending order of ID.
 // The iterator is invalidated if the TTree is modified.
 TTreeIter TTree_iter_start(const TTree* tree) {
-    NodeList nodes = NodeList_create();
+    TTreeIter iter;
+    NodeList node_trace = NodeList_from_buffer(iter.node_trace, NODE_TRACE_SIZE);
     Node* node = tree->root;
     // Smallest ID is all the way to the left
     while (node != NULL) {
-        NodeList_append(&nodes, node);
+        NodeList_append_assume_capacity(&node_trace, node);
         node = node->left;
     }
-    return (TTreeIter){
-        .nodes = nodes,
-        .pos = 0,
-    };
+    iter.node_trace_len = node_trace.length;
+    iter.pos = 0;
+    return iter;
 }
 
-// Advance the iterator to the next ID and Row.
-// Returns whether there was a next element.
+// Advance the iterator and write the next ID and Row to `out_id` and `out_row`.
+// Returns whether there was a next ID and Row.
+//
+// Also see `TTree_iter_start`.
 bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
-    if (iter->nodes.length == 0) {
+    if (iter->node_trace_len == 0) {
         return false;
     }
+    NodeList node_trace = NodeList_from_buffer(iter->node_trace, NODE_TRACE_SIZE);
+    node_trace.length = iter->node_trace_len;
 
     // Go to the next position in the current node
-    Node* node = NodeList_get(&iter->nodes, iter->nodes.length - 1);
+    Node* node = NodeList_get(&node_trace, node_trace.length - 1);
     *out_id = node->ids[iter->pos];
     *out_row = &node->data[iter->pos];
     if (++iter->pos < node->length) {
@@ -709,21 +717,22 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
     if (node->right != NULL) {
         node = node->right;
         while (node != NULL) {
-            NodeList_append(&iter->nodes, node);
+            NodeList_append(&node_trace, node);
             node = node->left;
         }
+        iter->node_trace_len = node_trace.length;
         return true;
     }
 
     // Otherwise, go up until we find a node where we came from the left subtree.
     // That node's subtree will contain the next largest ID.
     while (true) {
-        Node* node = NodeList_pop(&iter->nodes);
+        Node* node = NodeList_pop(&node_trace);
         // We iterated all the nodes
-        if (iter->nodes.length == 0) {
+        if (node_trace.length == 0) {
             break;
         }
-        Node* parent = NodeList_get(&iter->nodes, iter->nodes.length - 1);
+        Node* parent = NodeList_get(&node_trace, node_trace.length - 1);
         if (parent->left == node) {
             // Left subtree finished, the parent contains the next largest ID.
             // Conveniently the parent is already the last item in the list.
@@ -732,6 +741,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
         // Right subtree finished, meaning the parent's subtree is also finished
         // and we need to go up again
     }
+    iter->node_trace_len = node_trace.length;
     return true;
 }
 
@@ -753,7 +763,7 @@ TTreeBulkInsert TTree_bulk_insert_start(void) {
     };
 }
 
-// Should be called when a node is full or is the last node during a bulk insert.
+// Should be called during a bulk insert when a node is full or is the last node.
 //
 // Updates the node's last_id and inserts it into the tree, balancing as necessary.
 static void __bulk_insert_finish_node(Node* node, TTree* tree) {

@@ -10,10 +10,10 @@
 #define EXPECT_NODE_INVARIANTS(it)                                                                 \
     do {                                                                                           \
         TTreeIter iter = (it);                                                                     \
-        if (iter.nodes.length == 0) {                                                              \
+        if (iter.node_trace_len == 0) {                                                            \
             break;                                                                                 \
         }                                                                                          \
-        Node* node = NodeList_get(&iter.nodes, iter.nodes.length - 1);                             \
+        Node* node = iter.node_trace[iter.node_trace_len - 1];                                     \
         EXPECT(node->length > 0);                                                                  \
         EXPECT(node->last_id == node->ids[node->length - 1]);                                      \
         /* All IDs in a node's left subtree are less than the node's smallest ID. */               \
@@ -251,8 +251,7 @@ TEST ttree_rebalance(void) {
     ID id;
     Row* row;
     while (TTree_iter_next(&it, &id, &row)) {
-        Node* node =
-            it.nodes.length == 0 ? tree.root : NodeList_get(&it.nodes, it.nodes.length - 1);
+        Node* node = it.node_trace_len == 0 ? tree.root : it.node_trace[it.node_trace_len - 1];
         int8_t balance = __node_balance(node);
         EXPECT(balance >= -1);
         EXPECT(balance <= 1);
