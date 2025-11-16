@@ -12,6 +12,9 @@ typedef struct {
     char* name;
     char* programme;
     float mark;
+    // This member is unused padding and carries no meaning.
+    // However, it may be used by some operations as avoid memory allocations.
+    uint32_t temp_id;
 } Row;
 
 // Parse an ID from a string. Returns whether parsing was successful.
