@@ -214,11 +214,11 @@ static void __node_move(Node* dst, uint8_t dst_start, Node* src, uint8_t src_sta
             (dst->length - dst_start) * sizeof(ID));
     memmove(&dst->data[dst_start + len], &dst->data[dst_start],
             (dst->length - dst_start) * sizeof(Row));
-    dst->length += len;
-    dst->last_id = dst->ids[dst->length - 1];
     // Copy the IDs and Rows
     memcpy(&dst->ids[dst_start], &src->ids[src_start], len * sizeof(ID));
     memcpy(&dst->data[dst_start], &src->data[src_start], len * sizeof(Row));
+    dst->length += len;
+    dst->last_id = dst->ids[dst->length - 1];
     // Remove the copied IDs and Rows from `src`
     memmove(&src->ids[src_start], &src->ids[src_start + len],
             (src->length - src_start - len) * sizeof(ID));
