@@ -5,7 +5,6 @@
 #ifdef TYPE
 
 #include <assert.h>
-#include <malloc.h>
 #include <stdint.h>
 #include <stdlib.h>
 
