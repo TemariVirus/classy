@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "../src/db.h"
+#include "../src/fmemopen.h"
 #include "testing.h"
 
 TEST db_from_file_missing_table_name(void) {

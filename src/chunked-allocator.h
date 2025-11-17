@@ -38,6 +38,10 @@ typedef struct Allocator {
     Chunk* full_chunks;
 } Allocator;
 
+// Allocates a block of memory of `size` bytes with `alignment` alignment.
+// Returns NULL on failure.
+//
+// Memory allocated with this function must be freed with `__aligned_free`.
 static void* __aligned_alloc(size_t alignment, size_t size) {
 #if defined(_WIN32)
     return _aligned_malloc(size, alignment);
@@ -46,6 +50,7 @@ static void* __aligned_alloc(size_t alignment, size_t size) {
 #endif
 }
 
+// Frees memory allocated with `__aligned_alloc`.
 static void __aligned_free(void* ptr) {
 #if defined(_WIN32)
     _aligned_free(ptr); // Why Windows why 😭😭😭
