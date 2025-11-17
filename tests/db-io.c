@@ -12,7 +12,7 @@ TEST db_from_file_missing_table_name(void) {
 
     char db_file[] = "\r\n"
                      "Table Name: \r\n";
-    FILE* fptr = fmemopen(db_file, sizeof(db_file), "r");
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
     EXPECT_INT_EQUAL(ERROR_MISSING_TABLE_NAME, DB_from_file(fptr, &db));
 
@@ -29,7 +29,7 @@ TEST db_from_file_bad_format(void) {
                      "ID,Mark,Name,Programme\r\n"
                      R"(1234,64.4,"name",programme")"
                      "\r\n";
-    FILE* fptr = fmemopen(db_file, sizeof(db_file), "r");
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
     EXPECT_INT_EQUAL(ERROR_BAD_FORMAT, DB_from_file(fptr, &db));
 
@@ -48,7 +48,7 @@ TEST db_from_file_unordered_id(void) {
                      "\r\n"
                      R"(1234,64.4,"name","programme")"
                      "\r\n";
-    FILE* fptr = fmemopen(db_file, sizeof(db_file), "r");
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
     EXPECT_INT_EQUAL(ERROR_UNORDERED_ID, DB_from_file(fptr, &db));
 
@@ -71,7 +71,7 @@ TEST db_from_file_successful(void) {
                      "\r\n"
                      R"("student d",42069,inf,"limits \\n calculus")"
                      "\r\n";
-    FILE* fptr = fmemopen(db_file, sizeof(db_file), "r");
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
 
     DB db;
     EXPECT_INT_EQUAL(ERROR_OK, DB_from_file(fptr, &db));
@@ -118,7 +118,7 @@ TEST db_from_file_empty(void) {
     char db_file[] = "\r\n"
                      "Table Name: a\r\n"
                      "Name,ID,Mark,Programme\r\n";
-    FILE* fptr = fmemopen(db_file, sizeof(db_file), "r");
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
 
     DB db;
     EXPECT_INT_EQUAL(ERROR_OK, DB_from_file(fptr, &db));
