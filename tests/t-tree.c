@@ -64,7 +64,8 @@ TEST ttree_get(void) {
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        bool inserted = TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        EXPECT(inserted);
     }
 
     {
@@ -119,7 +120,8 @@ TEST ttree_insert(void) {
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        bool inserted = TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        EXPECT(inserted);
     }
 
     TTreeIter it = TTree_iter_start(&tree);
@@ -146,10 +148,12 @@ TEST ttree_insert_duplicate(void) {
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        bool inserted = TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+        EXPECT(inserted);
     }
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_insert(&tree, i, &(Row){.name = "", .programme = "updated", .mark = i});
+        bool inserted = TTree_insert(&tree, i, &(Row){.name = "", .programme = "hi", .mark = i});
+        EXPECT(!inserted);
     }
 
     TTreeIter it = TTree_iter_start(&tree);
@@ -158,8 +162,8 @@ TEST ttree_insert_duplicate(void) {
     for (ID i = 0; i < ROW_COUNT; i++) {
         EXPECT(TTree_iter_next(&it, &id, &row));
         EXPECT_INT_EQUAL(i, id);
-        EXPECT_STRING_EQUAL("", row->name);
-        EXPECT_STRING_EQUAL("updated", row->programme);
+        EXPECT_STRING_EQUAL("test", row->name);
+        EXPECT_STRING_EQUAL("", row->programme);
         EXPECT_FLOAT_EQUAL(i, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
@@ -176,7 +180,8 @@ TEST ttree_remove(void) {
     TTree tree = TTree_create();
 
     for (ID i = 0; i < ROW_COUNT; i++) {
-        TTree_insert(&tree, i, &(Row){.name = "", .programme = "6969", .mark = i});
+        bool inserted = TTree_insert(&tree, i, &(Row){.name = "", .programme = "6969", .mark = i});
+        EXPECT(inserted);
     }
     // Remove every even ID
     for (ID i = 0; i < ROW_COUNT; i += 2) {
@@ -213,7 +218,9 @@ TEST ttree_remove_random(void) {
     ID id = id_seed;
     for (int i = 0; i < ROW_COUNT; i++) {
         mix_id(&id);
-        TTree_insert(&tree, id, &(Row){.name = "", .programme = "6969", .mark = id});
+        bool inserted =
+            TTree_insert(&tree, id, &(Row){.name = "", .programme = "6969", .mark = id});
+        EXPECT(inserted); // There should be no collisions for this seed
     }
     // Remove every other ID
     id = id_seed;

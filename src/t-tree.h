@@ -482,18 +482,20 @@ Row* TTree_get(const TTree* tree, ID id) {
     return NULL;
 }
 
-// Insert or update a row by ID. Pointers in `row` are copied and do not need to be retained.
+// Insert a row by ID. Pointers in `row` are copied and do not need to be retained.
+// If the ID already exists, `tree` is not updated and this function returns false.
+// Otherwise, returns true.
 //
 // This function has O(log(n)) time complexity and O(1) space complexity,
 // where n is the number of nodes in `tree`.
-void TTree_insert(TTree* tree, ID id, const Row* row) {
+bool TTree_insert(TTree* tree, ID id, const Row* row) {
     if (tree->node_allocator == NULL) {
         tree->node_allocator = NodeAllocator_create();
     }
     if (tree->root == NULL) {
         tree->root = __node_create(tree->node_allocator);
         __node_insert(tree->root, 0, id, Row_dupe(row));
-        return;
+        return true;
     }
 
     // Find the node to insert into
@@ -503,10 +505,7 @@ void TTree_insert(TTree* tree, ID id, const Row* row) {
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
     Node* node = NodeList_get(&node_trace, node_trace.length - 1);
     if (exists) {
-        // Update existing row
-        Row_destroy(&node->data[pos]);
-        node->data[pos] = Row_dupe(row);
-        return;
+        return false;
     }
 
     // Insert row into node
@@ -515,7 +514,7 @@ void TTree_insert(TTree* tree, ID id, const Row* row) {
     if (node_len < NODE_SIZE) {
         // There's space, insert it here
         __node_insert(node, pos, id, Row_dupe(row));
-        return;
+        return true;
     }
 
     // No more space, create a new node if id is out of range
@@ -525,7 +524,7 @@ void TTree_insert(TTree* tree, ID id, const Row* row) {
         *node_ptr = __node_create(tree->node_allocator);
         __node_insert(*node_ptr, 0, id, Row_dupe(row));
         __rebalance_from_node_trace(tree, &node_trace);
-        return;
+        return true;
     }
 
     // No more space, displace the smallest ID
@@ -547,7 +546,7 @@ void TTree_insert(TTree* tree, ID id, const Row* row) {
         __node_insert(child, child->length, removed_id, removed_row);
         if (child->length > 1) {
             // No new node created, no need to rebalance
-            return;
+            return true;
         }
     } else {
         // There is no space in the left subtree, insert it further down
@@ -560,6 +559,7 @@ void TTree_insert(TTree* tree, ID id, const Row* row) {
     }
 
     __rebalance_from_node_trace(tree, &node_trace);
+    return true;
 }
 
 // Rebalance the subtree after a row was removed. `node_ptr` must point to a non-internal
