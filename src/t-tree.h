@@ -85,6 +85,12 @@ typedef struct {
     NodeAllocator* node_allocator;
 } TTree;
 
+// Return the minimum of `a` and `b`.
+static int __min(int a, int b) { return a < b ? a : b; }
+
+// Return the maximum of `a` and `b`.
+static int __max(int a, int b) { return a > b ? a : b; }
+
 // Create an empty node.
 static Node* __node_create(NodeAllocator* allocator) {
     Node* node = NodeAllocator_alloc(allocator);
@@ -129,7 +135,7 @@ static void __update_node_height(Node* node) {
     }
     uint8_t left_height = __node_height(node->left);
     uint8_t right_height = __node_height(node->right);
-    node->height = 1 + (left_height > right_height ? left_height : right_height);
+    node->height = 1 + __max(left_height, right_height);
 }
 
 // The balance factor of the node.
@@ -141,6 +147,16 @@ static int8_t __node_balance(Node* node) {
         return 0;
     }
     return __node_height(node->left) - __node_height(node->right);
+}
+
+// The maximum number of items that can be removed from this node
+// without violating T-tree invariants.
+static uint8_t __node_removable_count(Node* node) {
+    if (__node_kind(node) == NODEKIND_INTERNAL) {
+        return node->length - NODE_MIN_LEN;
+    }
+    bool can_subtract_one = node->length > 0;
+    return node->length - can_subtract_one;
 }
 
 // Insert an ID and Row into the node at position `pos`.
@@ -365,21 +381,20 @@ static void __ensure_min_len_after_rebalance(Node* node) {
     if (__node_kind(node) != NODEKIND_INTERNAL || node->length >= NODE_MIN_LEN) {
         return;
     }
-    // Otherwise, steal IDs from a non-internal child
-    uint8_t steal_count = NODE_MIN_LEN - node->length;
-    Node* child = (__node_kind(node->left) != NODEKIND_INTERNAL && node->left->length > steal_count)
-                      ? node->left
-                      : node->right;
-    assert(child->length > steal_count);
-    assert(__node_kind(child) != NODEKIND_INTERNAL);
 
-    if (child == node->left) {
-        __node_move(node, 0, child, child->length - steal_count, steal_count);
-    } else {
-        __node_move(node, node->length, child, 0, steal_count);
-    }
+    // Otherwise, steal items from children
+    uint8_t needed_count = NODE_MIN_LEN - node->length;
+    // Try left child
+    uint8_t steal_count = __min(needed_count, __node_removable_count(node->left));
+    __node_move(node, 0, node->left, node->left->length - steal_count, steal_count);
+    needed_count -= steal_count;
+    // Try right child
+    steal_count = __min(needed_count, __node_removable_count(node->right));
+    __node_move(node, node->length, node->right, 0, steal_count);
+    needed_count -= steal_count;
+
+    assert(node->length >= NODE_MIN_LEN);
 }
-
 // Backtrack the node trace to rebalance the tree bottom-up.
 // This function ensures that the invariants of the T-tree are preserved.
 static void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
