@@ -13,7 +13,7 @@ typedef struct {
     char* programme;
     float mark;
     // This member is unused padding and carries no meaning.
-    // However, it may be used by some operations as avoid memory allocations.
+    // However, it may be used by some operations to avoid memory allocations.
     uint32_t temp_id;
 } Row;
 
@@ -36,7 +36,7 @@ bool parse_id(const char* str, ID* out_id) {
 bool parse_float(const char* str, float* out_mark) {
     // C's string APIs all suck because they use null terminators
     // instead of storing the length, dammit.
-    if (str == NULL) {
+    if (str == NULL || str_empty(str)) {
         return false;
     }
     char* end_ptr;
