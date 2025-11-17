@@ -5,17 +5,17 @@
 #include <stdint.h>
 #include <string.h>
 
-#define COLUMN_COUNT 4
-
 typedef enum {
     COLUMN_ID = 0,
     COLUMN_NAME = 1,
     COLUMN_PROGRAMME = 2,
     COLUMN_MARK = 3,
 } Column;
+#define COLUMN_COUNT 4
 
 // The COLUMN_* values indicate the bit position.
 typedef uint8_t ColumnsMask;
+#define ALL_COLUMNS_MASK (((ColumnsMask)1 << COLUMN_COUNT) - 1)
 
 const char* Column_name(Column column) {
     switch (column) {

@@ -48,11 +48,13 @@ bool parse_float(const char* str, float* out_mark) {
     return true;
 }
 
-// Read a string enclosed in double quotes.
-// Returns a pointer to the end of the string, or NULL on failure.
+// Read and escapes a string enclosed in double quotes.
+// Returns a pointer to the start of the string, or NULL on failure.
 //
-// `str` is modified to escape '"' and '\', and to add a null terminator.
-char* read_string(char* str) {
+// On success, `str_ptr` is updated to point to the character after the closing quote.
+// `*str_ptr` is modified to escape '"' and '\', and to add a null terminator.
+char* read_escaped_string(char** str_ptr) {
+    char* str = *str_ptr;
     if (str == NULL || str[0] != '"') {
         return NULL;
     }
@@ -63,7 +65,8 @@ char* read_string(char* str) {
         case '"':
             // End of string
             str[write_idx] = '\0';
-            return &str[read_idx + 1];
+            *str_ptr = &str[read_idx + 1];
+            return str;
         case '\\':
             // Escape character
             read_idx++;

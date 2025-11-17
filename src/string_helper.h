@@ -52,27 +52,31 @@ bool read_until_delim_or_eof(char* buf, size_t limit, const char* delim, FILE* f
     return false;
 }
 
+// Initialise this struct directly to start splitting a string.
 typedef struct {
+    // Current position in the string to split.
     char* current;
+    // The delimiter. The character to split on.
+    const char delim;
 } StringSplit;
 
-// Returns a pointer to the next token in the string split by `delim`,
-// or NULL if there are no more tokens. If there are multiple consecutive
-// delimiters, empty tokens are returned.
+// Advances `split` to the next substring, and returns the current substring
+// delimited by `split->delim`, or NULL if there are no more substrings.
+// If there are multiple consecutive delimiters, empty substrings are returned.
 //
-// To avoid allocating memory, `split->current` is modified.
-char* string_split_next(StringSplit* split, const char delim) {
+// To avoid allocating memory, `split->current` is modified to insert null terminators.
+char* string_split_next(StringSplit* split) {
     if (split->current == NULL) {
         return NULL;
     }
 
-    char* token = split->current;
-    char* next_delim = strchr(split->current, delim);
+    char* sub = split->current;
+    char* next_delim = strchr(split->current, split->delim);
     if (next_delim == NULL) {
         split->current = NULL;
     } else {
         *next_delim = '\0';
         split->current = next_delim + 1;
     }
-    return token;
+    return sub;
 }
