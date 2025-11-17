@@ -88,7 +88,7 @@ void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
 TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
     if (allocator->free_chunks == NULL) {
         // We need to allocate a new chunk
-#if defined(_MSC_VER)
+#if defined(_WIN32)
         Chunk* chunk = _aligned_malloc(sizeof(Chunk), CHUNK_SIZE);
 #else
         Chunk* chunk = aligned_alloc(CHUNK_SIZE, sizeof(Chunk));
@@ -149,7 +149,11 @@ void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
     if (chunk->used_count == 0) {
         // Chunk is completely unused, free it to not hog memory
         TYPED(__list_remove)(&allocator->free_chunks, chunk);
+#if defined(_WIN32)
+        _aligned_free(chunk);
+#else
         free(chunk);
+#endif
     }
 }
 

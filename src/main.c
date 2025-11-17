@@ -6,7 +6,7 @@
 
 int main(void) {
     DB db;
-    FILE* fptr = fopen("sample-db.txt", "r");
+    FILE* fptr = fopen("sample-db.txt", "rb");
     if (fptr == NULL) {
         perror("Failed to open file");
         return EXIT_FAILURE;
