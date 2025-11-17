@@ -19,7 +19,7 @@ typedef struct {
 
 // Parse an ID from a string. Returns whether parsing was successful.
 bool parse_id(const char* str, ID* out_id) {
-    if (str == NULL) {
+    if (str == NULL || str_empty(str)) {
         return false;
     }
     char* end_ptr;

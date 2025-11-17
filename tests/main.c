@@ -7,6 +7,7 @@ int main(void) {
     db_from_file_missing_table_name();
     db_from_file_bad_format();
     db_from_file_unordered_id();
+    db_from_file_missing_line_term();
     db_from_file_successful();
     db_from_file_empty();
 

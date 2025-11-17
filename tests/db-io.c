@@ -57,6 +57,22 @@ TEST db_from_file_unordered_id(void) {
     END_TEST();
 }
 
+TEST db_from_file_missing_line_term(void) {
+    START_TEST("DB from file missing line terminator");
+
+    char db_file[] = "\r\n"
+                     "Table Name: abc\r\n"
+                     "ID,Mark,Name,Programme\r\n"
+                     R"(1234,64.4,"name","programme")";
+    FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
+    DB db;
+    EXPECT_INT_EQUAL(ERROR_BAD_FORMAT, DB_from_file(fptr, &db));
+
+    DB_destroy(&db);
+    fclose(fptr);
+    END_TEST();
+}
+
 TEST db_from_file_successful(void) {
     START_TEST("DB from file successful");
 

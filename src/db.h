@@ -169,6 +169,11 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
         TTree_bulk_insert(&bulk, id, &row);
         row_count++;
     }
+    // Ensure the last line was properly terminated
+    if (!str_empty(line)) {
+        err = DB_from_file__bad_format;
+        goto error_cleanup;
+    }
 
     *out_db = (DB){
         .data = TTree_bulk_insert_end(&bulk),
