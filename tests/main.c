@@ -14,6 +14,7 @@ int main(void) {
     ttree_get();
     ttree_get_empty();
     ttree_insert();
+    ttree_insert_duplicate();
     ttree_remove();
     ttree_remove_random();
     ttree_rebalance();

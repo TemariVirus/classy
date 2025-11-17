@@ -139,6 +139,36 @@ TEST ttree_insert(void) {
     END_TEST();
 }
 
+TEST ttree_insert_duplicate(void) {
+    START_TEST("T-tree insert");
+
+    const int ROW_COUNT = 10000;
+    TTree tree = TTree_create();
+
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        TTree_insert(&tree, i, &(Row){.name = "test", .programme = "", .mark = i});
+    }
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        TTree_insert(&tree, i, &(Row){.name = "", .programme = "updated", .mark = i});
+    }
+
+    TTreeIter it = TTree_iter_start(&tree);
+    ID id;
+    Row* row;
+    for (ID i = 0; i < ROW_COUNT; i++) {
+        EXPECT(TTree_iter_next(&it, &id, &row));
+        EXPECT_INT_EQUAL(i, id);
+        EXPECT_STRING_EQUAL("", row->name);
+        EXPECT_STRING_EQUAL("updated", row->programme);
+        EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_NODE_INVARIANTS(it);
+    }
+    EXPECT(!TTree_iter_next(&it, &id, &row));
+
+    TTree_destroy(&tree);
+    END_TEST();
+}
+
 TEST ttree_remove(void) {
     START_TEST("T-tree remove");
 
