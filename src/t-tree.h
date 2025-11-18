@@ -86,10 +86,10 @@ typedef struct {
 } TTree;
 
 // Return the minimum of `a` and `b`.
-static int __min(int a, int b) { return a < b ? a : b; }
+static int __min2(int a, int b) { return a < b ? a : b; }
 
 // Return the maximum of `a` and `b`.
-static int __max(int a, int b) { return a > b ? a : b; }
+static int __max2(int a, int b) { return a > b ? a : b; }
 
 // Create an empty node.
 static Node* __node_create(NodeAllocator* allocator) {
@@ -135,7 +135,7 @@ static void __update_node_height(Node* node) {
     }
     uint8_t left_height = __node_height(node->left);
     uint8_t right_height = __node_height(node->right);
-    node->height = 1 + __max(left_height, right_height);
+    node->height = 1 + __max2(left_height, right_height);
 }
 
 // The balance factor of the node.
@@ -385,11 +385,11 @@ static void __ensure_min_len_after_rebalance(Node* node) {
     // Otherwise, steal items from children
     uint8_t needed_count = NODE_MIN_LEN - node->length;
     // Try left child
-    uint8_t steal_count = __min(needed_count, __node_removable_count(node->left));
+    uint8_t steal_count = __min2(needed_count, __node_removable_count(node->left));
     __node_move(node, 0, node->left, node->left->length - steal_count, steal_count);
     needed_count -= steal_count;
     // Try right child
-    steal_count = __min(needed_count, __node_removable_count(node->right));
+    steal_count = __min2(needed_count, __node_removable_count(node->right));
     __node_move(node, node->length, node->right, 0, steal_count);
     needed_count -= steal_count;
 
