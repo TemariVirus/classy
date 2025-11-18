@@ -25,18 +25,21 @@ static_assert(sizeof(TYPE) >= sizeof(uint32_t),
               "TYPE must be large enough to hold the free list index");
 
 typedef struct Chunk {
-    // Aligned to CHUNK_SIZE for fast pointer to chunk lookup
+    // Aligned to CHUNK_SIZE for fast pointer-to-chunk lookup
     TYPE memory[CHUNK_CAPACITY];
     // Head of the free list (index into `memory`)
     uint32_t free_list;
     // Number of used items in `memory`
     uint32_t used_count;
+    // Doubly linked list pointers
     struct Chunk* prev;
     struct Chunk* next;
 } Chunk;
 
 typedef struct Allocator {
+    // Linked list of chunks with free space
     Chunk* free_chunks;
+    // Linked list of full chunks
     Chunk* full_chunks;
 } Allocator;
 
@@ -73,16 +76,19 @@ Allocator* TYPED(Allocator_create)(void) {
 
 // Destroy the chunked allocator and free all memory.
 void TYPED(Allocator_destroy)(Allocator* allocator) {
+    // Free all free chunks
     for (Chunk* chunk = allocator->free_chunks; chunk != NULL; chunk = chunk->next) {
         free(chunk);
     }
+    // Free all full chunks
     for (Chunk* chunk = allocator->full_chunks; chunk != NULL; chunk = chunk->next) {
         free(chunk);
     }
+    // Free the allocator itself
     free(allocator);
 }
 
-// Prepend a chunk to the linked list.
+// Prepend `chunk` to the linked list.
 void TYPED(__list_prepend)(Chunk** list, Chunk* chunk) {
     chunk->prev = NULL;
     chunk->next = *list;
@@ -92,7 +98,7 @@ void TYPED(__list_prepend)(Chunk** list, Chunk* chunk) {
     *list = chunk;
 }
 
-// Remove a chunk from the linked list.
+// Remove `chunk` from the linked list.
 void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
     if (chunk->prev != NULL) {
         chunk->prev->next = chunk->next;
@@ -108,27 +114,29 @@ void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
 }
 
 // Allocate a new item from the allocator.
+// Returns NULL on failure.
+//
+// Allocated items must be freed with `Allocator_free`.
 TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
 #if defined(__APPLE__)
     return malloc(sizeof(TYPE));
 #endif
 
+    // If there are no free chunks, allocate a new chunk
     if (allocator->free_chunks == NULL) {
-        // We need to allocate a new chunk
         Chunk* chunk = __aligned_alloc(CHUNK_SIZE, sizeof(Chunk));
         if (chunk == NULL) {
             return NULL;
         }
-
-        chunk->used_count = 0;
-        TYPED(__list_prepend)(&allocator->free_chunks, chunk);
-
         // Initialise free list
         for (uint32_t i = 0; i < CHUNK_CAPACITY - 1; i++) {
             uint32_t* ptr = (uint32_t*)&chunk->memory[i];
             *ptr = i + 1;
         }
         chunk->free_list = 0;
+        // Prepend to free chunks list
+        chunk->used_count = 0;
+        TYPED(__list_prepend)(&allocator->free_chunks, chunk);
     }
 
     // Allocate from the first free chunk
@@ -137,9 +145,11 @@ TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
     // This address holds the next free index from the free list
     TYPE* item = &chunk->memory[chunk->free_list];
     uint32_t next_index = *(uint32_t*)item;
+    // Update the free list head
     chunk->free_list = next_index;
     chunk->used_count++;
 
+    // Move the chunk to the full list if it's now full
     if (chunk->used_count == CHUNK_CAPACITY) {
         TYPED(__list_remove)(&allocator->free_chunks, chunk);
         TYPED(__list_prepend)(&allocator->full_chunks, chunk);
@@ -154,11 +164,14 @@ void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
     free(ptr);
     return;
 #endif
+
+    // Copy behaviour of libc's `free` on NULL pointers
     if (ptr == NULL) {
         return;
     }
 
-    // Each chunk is aligned to CHUNK_SIZE
+    // Each chunk is aligned to CHUNK_SIZE.
+    // Since CHUNK_SIZE is a power of two, this gives us the chunk's address.
     Chunk* chunk = (Chunk*)((uintptr_t)ptr & CHUNK_MASK);
     bool was_full = (chunk->used_count == CHUNK_CAPACITY);
 
@@ -169,6 +182,7 @@ void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
     chunk->used_count--;
 
     if (was_full) {
+        // Chunk is no longer full, move it back to the free list
         TYPED(__list_remove)(&allocator->full_chunks, chunk);
         TYPED(__list_prepend)(&allocator->free_chunks, chunk);
     }
