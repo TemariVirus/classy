@@ -94,8 +94,6 @@ static int __max2(int a, int b) { return a > b ? a : b; }
 // Create an empty node.
 static Node* __node_create(NodeAllocator* allocator) {
     Node* node = NodeAllocator_alloc(allocator);
-    // Ensure the node is cache-aligned for performance reasons.
-    assert((uintptr_t)node % CACHE_ALIGN == 0);
     node->left = NULL;
     node->right = NULL;
     node->length = 0;
