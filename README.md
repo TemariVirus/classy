@@ -95,7 +95,7 @@ If condition is not given, all rows in the active database are used.
 ### UPDATE
 
 ```plain
-UPDATE ID=id[column=value]*
+UPDATE ID=id column=value...
 ```
 
 Updates the values of the other columns in the row with the specified `ID`, if it exists.

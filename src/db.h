@@ -7,11 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "command.h"
 #include "error.h"
 #include "row.h"
 #include "string_helper.h"
 #include "t-tree.h"
+#include "tokenizer.h"
 
 #define MAX_LINE_LEN 4096
 #define LINE_TERM "\r\n"
@@ -37,11 +37,14 @@ void DB_destroy(DB* db) {
     db->table_name = NULL;
 }
 
+// Parses the column line in the file into an array of Columns.
+// Returns true on success, false on failure.
 static bool __parse_columns(char* line, Column columns[COLUMN_COUNT]) {
     StringSplit split = {.current = line, .delim = ','};
     for (int i = 0; i < COLUMN_COUNT; i++) {
         char* col_name = string_split_next(&split);
-        if (!Column_from_name(col_name, &columns[i])) {
+        columns[i] = str_to_column(&col_name);
+        if (col_name == NULL || !str_empty(col_name)) {
             return false;
         }
     }
