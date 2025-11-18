@@ -62,7 +62,7 @@ void print_help(void) {
         "\n"
         "Row values cannot contain newlines (\\n).\n"
         "Double quotes (\") and backslashes (\\) within string values must be escaped by "
-        "preceeding them with a backslash.\n"
+        "preceding them with a backslash.\n"
         "\n"
         "----------------------------------------------------------------------------------------\n"
         "\n"

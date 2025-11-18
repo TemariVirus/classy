@@ -51,7 +51,7 @@ Inserts a new row into the active database.
 The columns may be in any order, but must appear exactly once.
 
 Row values cannot contain newlines (`\n`).
-Double quotes (`"`) and backslashes (`\`) within string values must be escaped by preceeding them with a backslash.
+Double quotes (`"`) and backslashes (`\`) within string values must be escaped by preceding them with a backslash.
 
 ### QUERY
 
