@@ -16,7 +16,9 @@ typedef struct {
     size_t capacity;
 } TYPED(List);
 
-// Creates an empty list.
+// Creates an empty list. The list should be freed with `List_destroy`.
+//
+// Also see `List_from_buffer`.
 TYPED(List) TYPED(List_create)(void) {
     return (TYPED(List)){
         .items = NULL,
@@ -26,6 +28,9 @@ TYPED(List) TYPED(List_create)(void) {
 }
 
 // Creates an empty list backed by the given buffer.
+// `buffer` must be large enough to hold `capacity` elements.
+//
+// Also see `List_create`.
 TYPED(List) TYPED(List_from_buffer)(TYPE* buffer, size_t capacity) {
     return (TYPED(List)){
         .items = buffer,
@@ -34,7 +39,8 @@ TYPED(List) TYPED(List_from_buffer)(TYPE* buffer, size_t capacity) {
     };
 }
 
-// Frees all elements in the list.
+// Frees all memory used by the list.
+// The list may be reused after calling this function.
 void TYPED(List_destroy)(TYPED(List) * self) {
     if (self->items != NULL) {
         free(self->items);
@@ -72,24 +78,32 @@ void TYPED(List_set)(TYPED(List) * self, size_t index, TYPE value) {
 }
 
 // Append an element to the end of the list without checking capacity.
+// This function never allocates memory.
+//
+// Also see `List_append`.
 void TYPED(List_append_assume_capacity)(TYPED(List) * self, TYPE item) {
     assert(self->length < self->capacity);
     self->items[self->length++] = item;
 }
 
 // Append an element to the end of the list.
+//
+// Also see `List_append_assume_capacity`.
 void TYPED(List_append)(TYPED(List) * self, TYPE item) {
     TYPED(List_ensure_capacity)(self, self->length + 1);
     TYPED(List_append_assume_capacity)(self, item);
 }
 
 // Pop an element from the end of the list.
+//
+// Also see `List_remove`.
 TYPE TYPED(List_pop)(TYPED(List) * self) {
     assert(self->length > 0);
     return self->items[--self->length];
 }
 
-// Remove an element from the specified index.
+// Remove an element from the specified index,
+// maintaining the order of the remaining elements.
 TYPE TYPED(List_remove)(TYPED(List) * self, size_t index) {
     assert(index < self->length);
 
