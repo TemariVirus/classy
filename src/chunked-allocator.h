@@ -1,6 +1,8 @@
 // Chunked allocator with O(1) average alloc and free time.
 // Worse case alloc/free time matches that of the underlying malloc/free.
 // Can only allocate a single fixed size.
+//
+// Due to a bug in MacOS's libc, this falls back to malloc/free on MacOS.
 
 #ifdef TYPE
 
@@ -107,6 +109,10 @@ void TYPED(__list_remove)(Chunk** list, Chunk* chunk) {
 
 // Allocate a new item from the allocator.
 TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
+#if defined(__APPLE__)
+    return malloc(sizeof(TYPE));
+#endif
+
     if (allocator->free_chunks == NULL) {
         // We need to allocate a new chunk
         Chunk* chunk = __aligned_alloc(CHUNK_SIZE, sizeof(Chunk));
@@ -144,6 +150,10 @@ TYPE* TYPED(Allocator_alloc)(Allocator* allocator) {
 
 // Free an item back to the allocator.
 void TYPED(Allocator_free)(Allocator* allocator, TYPE* ptr) {
+#if defined(__APPLE__)
+    free(ptr);
+    return;
+#endif
     if (ptr == NULL) {
         return;
     }
