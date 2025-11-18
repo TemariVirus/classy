@@ -6,6 +6,14 @@ A classy class management system
 
 All commands are case-sensitive. All commands are terminated by a newline character. Including the newline character, commands cannot exceed 4095 characters in length.
 
+### HELP
+
+```plain
+HELP
+```
+
+Displays a list of all available commands and what they do.
+
 ### OPEN
 
 ```plain
@@ -37,7 +45,7 @@ INSERT ID=id Name="name" Programme="programme" Mark=mark
 Inserts a new row into the active database.
 
 `ID` is a 32-bit unsigned integer.
-`Name` and `Programme` are strings and must enclosed in double quotes (`"`).
+`Name` and `Programme` are strings and must be enclosed in double quotes (`"`).
 `Mark` is a single-precision floating-point number.
 
 The columns may be in any order, but must appear exactly once.
@@ -55,13 +63,13 @@ Displays all rows in the active database that satisfy `condition`.
 
 `condition` may be composed of the following operations (ordered by highest to lowest precedence):
 
-- integer, float, and string equality (column = x)
-- integer and float greater than (column > x)
-- integer and float less than (column < x)
-- string contains (x IN column)
-- boolean not (NOT a)
-- boolean and (a AND b)
-- boolean or (a OR b)
+- integer, float, and string equality (column = val)
+- integer and float greater than (column > val)
+- integer and float less than (column < val)
+- string contains (val IN column)
+- boolean not (NOT expr)
+- boolean and (expr AND expr)
+- boolean or (expr OR expr)
 
 Parentheses may be used to group sub-conditions. If necessary, integers will be automatically converted to floats. Whitespace around the =, >, and < operators is ignored.
 
@@ -93,7 +101,6 @@ UPDATE ID=id[column=value]*
 Updates the values of the other columns in the row with the specified `ID`, if it exists.
 
 The columns may be in any order, but cannot appear more than once.
-
 The `ID` column is required. The other columns are optional.
 
 `value` follows the same constraints as in `INSERT`.
