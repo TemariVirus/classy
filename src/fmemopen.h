@@ -16,7 +16,10 @@ FILE* fmemopen(void* buf, size_t size, const char* __modes) {
         return NULL;
     }
     fwrite(buf, 1, size, fptr);
-    fseek(fptr, 0, SEEK_SET);
+    if (__modes[0] != 'a') {
+        // If not appending, rewind to the beginning
+        fseek(fptr, 0, SEEK_SET);
+    }
     return fptr;
 }
 #endif

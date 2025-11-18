@@ -3,7 +3,7 @@
 // - All IDs in a node are sorted in ascending order.
 // - All IDs in a node's left subtree are less than the node's smallest ID.
 // - All IDs in a node's right subtree are greater than the node's largest ID.
-// - Internal nodes contain at least NODE_MIN_LEN items.
+// - Internal nodes contain at least TTREE_NODE_MIN_LEN items.
 // - The height difference between a node's 2 children is at most 1.
 //
 // Also see Wikipedia's article on AVL trees (https://en.wikipedia.org/wiki/AVL_tree)
@@ -22,24 +22,24 @@
 #define CACHE_ALIGN 64 // Assume a cache line is 64B
 // Maximum number of IDs in a node.
 // Fastest node size found empirically.
-#define NODE_SIZE 38
+#define TTREE_NODE_SIZE 38
 // Minimum number of items in an internal node.
-#define NODE_MIN_LEN ((NODE_SIZE + 1) / 2)
+#define TTREE_NODE_MIN_LEN ((TTREE_NODE_SIZE + 1) / 2)
 // Since there are only 2^32 unique sutdent IDs, the tree will never have more than 39 levels.
 // T-trees follow the same height bounds as AVL trees:
 // https://en.wikipedia.org/wiki/AVL_tree#Properties
 //
-// log_phi((2^32 / NODE_MIN_LEN) + 2) - 0.3277 = 39.64...
-#define NODE_TRACE_SIZE 39
+// log_phi((2^32 / TTREE_NODE_MIN_LEN) + 2) - 0.3277 = 39.64...
+#define TTREE_NODE_TRACE_LEN 39
 
-// A node in the T-tree. Contains up to NODE_SIZE IDs and Rows.
+// A node in the T-tree. Contains up to TTREE_NODE_SIZE IDs and Rows.
 //
 // ID is split from the rest of the data so that we can pack them more tightly in cache
-typedef struct Node {
+typedef struct TTreeNode {
     // Left child
-    struct Node* left;
+    struct TTreeNode* left;
     // Right child
-    struct Node* right;
+    struct TTreeNode* right;
     // Number of IDs in this node.
     uint8_t length;
     // Height of the subtree rooted at this node.
@@ -48,41 +48,42 @@ typedef struct Node {
     // Copy of the last ID to reduce cache misses during search.
     ID last_id;
     // IDs must always be sorted in ascending order.
-    ID ids[NODE_SIZE];
+    ID ids[TTREE_NODE_SIZE];
     // data[0] is associated with ids[0], etc.
     // data must come last so that everything else is cache-aligned.
-    Row data[NODE_SIZE];
-} Node;
-// Ensure that Node.left, Node.right, Node.ids[0] and Node.last_id all lie on the same cache line.
-// These 4 fields are used in searching for the bounding node (which takes up the majority of time),
-// so this speeds things up considerably.
-static_assert(sizeof(Node) % CACHE_ALIGN == 0, "Node size must be a multiple of cache line size");
+    Row data[TTREE_NODE_SIZE];
+} TTreeNode;
+// Ensure that TTreeNode.left, TTreeNode.right, TTreeNode.ids[0] and TTreeNode.last_id all lie on
+// the same cache line. These 4 fields are used in searching for the bounding node (which takes up
+// the majority of time), so this speeds things up considerably.
+static_assert(sizeof(TTreeNode) % CACHE_ALIGN == 0,
+              "TTreeNode size must be a multiple of cache line size");
 
 // The different kinds of nodes, depending on where they are in the tree.
 typedef enum {
     // A leaf node has no children.
-    NODEKIND_LEAF,
+    TTREE_NODEKIND_LEAF,
     // A half-leaf node has one child.
-    NODEKIND_HALFLEAF,
+    TTREE_NODEKIND_HALFLEAF,
     // An internal node has two children.
-    NODEKIND_INTERNAL,
-} NodeKind;
+    TTREE_NODEKIND_INTERNAL,
+} TTreeNodeKind;
 
 // chunked-allocator for fast aligned allocation
-#define TYPE Node
-#define TYPED(THING) Node##THING
+#define TYPE TTreeNode
+#define TYPED(THING) TTreeNode##THING
 #include "chunked-allocator.h"
 
-#define TYPE Node*
-#define TYPED(THING) Node##THING
+#define TYPE TTreeNode*
+#define TYPED(THING) TTreeNode##THING
 #include "list.h"
 
 // The TTree owns the memory (and strings) of the nodes and data.
 typedef struct {
     // NULL only if the tree is empty.
-    Node* root;
+    TTreeNode* root;
     // NULL only if the tree is empty.
-    NodeAllocator* node_allocator;
+    TTreeNodeAllocator* node_allocator;
 } TTree;
 
 // Return the minimum of `a` and `b`.
@@ -92,8 +93,8 @@ static int __min2(int a, int b) { return a < b ? a : b; }
 static int __max2(int a, int b) { return a > b ? a : b; }
 
 // Create an empty node.
-static Node* __node_create(NodeAllocator* allocator) {
-    Node* node = NodeAllocator_alloc(allocator);
+static TTreeNode* __ttree_node_create(TTreeNodeAllocator* allocator) {
+    TTreeNode* node = TTreeNodeAllocator_alloc(allocator);
     node->left = NULL;
     node->right = NULL;
     node->length = 0;
@@ -102,21 +103,21 @@ static Node* __node_create(NodeAllocator* allocator) {
 }
 
 // Get the kind of the given node.
-static NodeKind __node_kind(const Node* node) {
+static TTreeNodeKind __ttree_node_kind(const TTreeNode* node) {
     assert(node != NULL);
     if (node->left == NULL && node->right == NULL) {
-        return NODEKIND_LEAF;
+        return TTREE_NODEKIND_LEAF;
     }
     if (node->left != NULL && node->right != NULL) {
-        return NODEKIND_INTERNAL;
+        return TTREE_NODEKIND_INTERNAL;
     }
-    return NODEKIND_HALFLEAF;
+    return TTREE_NODEKIND_HALFLEAF;
 }
 
 // Get the height of the node's subtree.
 //
 // Also see `__update_node_height`.
-static uint8_t __node_height(Node* node) {
+static uint8_t __ttree_node_height(TTreeNode* node) {
     // NULL node is an empty subtree
     if (node == NULL) {
         return 0;
@@ -126,32 +127,32 @@ static uint8_t __node_height(Node* node) {
 
 // Update the height of the node's subtree. The height of the children must be correct.
 //
-// Also see `__node_height`.
-static void __update_node_height(Node* node) {
+// Also see `__ttree_node_height`.
+static void __ttree_node_update_height(TTreeNode* node) {
     if (node == NULL) {
         return;
     }
-    uint8_t left_height = __node_height(node->left);
-    uint8_t right_height = __node_height(node->right);
+    uint8_t left_height = __ttree_node_height(node->left);
+    uint8_t right_height = __ttree_node_height(node->right);
     node->height = 1 + __max2(left_height, right_height);
 }
 
 // The balance factor of the node.
 //
-// Also see `__node_height`.
-static int8_t __node_balance(Node* node) {
+// Also see `__ttree_node_height`.
+static int8_t __ttree_node_balance_factor(TTreeNode* node) {
     // NULL node is an empty subtree
     if (node == NULL) {
         return 0;
     }
-    return __node_height(node->left) - __node_height(node->right);
+    return __ttree_node_height(node->left) - __ttree_node_height(node->right);
 }
 
 // The maximum number of items that can be removed from this node
 // without violating T-tree invariants.
-static uint8_t __node_removable_count(Node* node) {
-    if (__node_kind(node) == NODEKIND_INTERNAL) {
-        return node->length - NODE_MIN_LEN;
+static uint8_t __ttree_node_removable_count(TTreeNode* node) {
+    if (__ttree_node_kind(node) == TTREE_NODEKIND_INTERNAL) {
+        return node->length - TTREE_NODE_MIN_LEN;
     }
     bool can_subtract_one = node->length > 0;
     return node->length - can_subtract_one;
@@ -161,11 +162,11 @@ static uint8_t __node_removable_count(Node* node) {
 // Appending can be achieved by setting `pos` to `node->length`.
 // `pos` must be less than or equal to `node->length`.
 //
-// Also see `__node_remove`.
-static void __node_insert(Node* node, uint8_t pos, ID id, Row row) {
+// Also see `__ttree_node_remove`.
+static void __ttree_node_insert(TTreeNode* node, uint8_t pos, ID id, Row row) {
     // pos == node->length is valid as it appends id and row to the end
     assert(pos <= node->length);
-    assert(node->length < NODE_SIZE);
+    assert(node->length < TTREE_NODE_SIZE);
 
     memmove(&node->ids[pos + 1], &node->ids[pos], (node->length - pos) * sizeof(ID));
     node->ids[pos] = id;
@@ -178,8 +179,8 @@ static void __node_insert(Node* node, uint8_t pos, ID id, Row row) {
 // Remove the ID and Row at position `pos` from the node, writing them to `out_id` and `out_row`.
 // `pos` must be less than `node->length`.
 //
-// Also see `__node_insert`.
-static void __node_remove(Node* node, uint8_t pos, ID* out_id, Row* out_row) {
+// Also see `__ttree_node_insert`.
+static void __ttree_node_remove(TTreeNode* node, uint8_t pos, ID* out_id, Row* out_row) {
     assert(pos < node->length);
     assert(node->length > 0);
 
@@ -193,13 +194,13 @@ static void __node_remove(Node* node, uint8_t pos, ID* out_id, Row* out_row) {
     }
 }
 
-// Does `__node_remove(node, 0, out_id, out_row)` followed by `__node_insert(node, pos-1, id, row)`.
-// This is faster than what the compiler generates for the above code :(
-// `pos` must be greater than 0 and less than `node->length`.
+// Does `__ttree_node_remove(node, 0, out_id, out_row)` followed by `__ttree_node_insert(node,
+// pos-1, id, row)`. This is faster than what the compiler generates for the above code :( `pos`
+// must be greater than 0 and less than `node->length`.
 //
-// Also see `__node_insert` and `__node_remove`.
-static void __node_insert_removing_first(Node* node, uint8_t pos, ID id, Row row, ID* out_id,
-                                         Row* out_row) {
+// Also see `__ttree_node_insert` and `__ttree_node_remove`.
+static void __ttree_node_insert_removing_first(TTreeNode* node, uint8_t pos, ID id, Row row,
+                                               ID* out_id, Row* out_row) {
     assert(pos > 0 && pos < node->length);
 
     *out_id = node->ids[0];
@@ -218,9 +219,10 @@ static void __node_insert_removing_first(Node* node, uint8_t pos, ID id, Row row
 // `dst` starting at `dst_start`. Removes the copied IDs and rows from `src`.
 //
 // `dst` and `src` must not be the same node.
-static void __node_move(Node* dst, uint8_t dst_start, Node* src, uint8_t src_start, uint8_t len) {
+static void __ttree_node_move(TTreeNode* dst, uint8_t dst_start, TTreeNode* src, uint8_t src_start,
+                              uint8_t len) {
     assert(dst_start <= dst->length);
-    assert(dst_start + len <= NODE_SIZE);
+    assert(dst_start + len <= TTREE_NODE_SIZE);
     assert(src_start + len <= src->length);
 
     // Make space for the IDs and Rows to be copied
@@ -246,18 +248,18 @@ static void __node_move(Node* dst, uint8_t dst_start, Node* src, uint8_t src_sta
 
 // Merge `right` into `left`, freeing `right`.
 // Asserts that all IDs in `left` are less than those in `right`.
-// Asserts that the combined length does not exceed NODE_SIZE.
+// Asserts that the combined length does not exceed TTREE_NODE_SIZE.
 //
 // `left` and `right` must not be the same node.
-static void __node_merge(NodeAllocator* allocator, Node* left, Node* right) {
+static void __ttree_node_merge(TTreeNodeAllocator* allocator, TTreeNode* left, TTreeNode* right) {
     assert(left->last_id < right->ids[0]);
-    assert(left->length + right->length <= NODE_SIZE);
+    assert(left->length + right->length <= TTREE_NODE_SIZE);
 
     memcpy(&left->ids[left->length], &right->ids[0], right->length * sizeof(ID));
     memcpy(&left->data[left->length], &right->data[0], right->length * sizeof(Row));
     left->length += right->length;
     left->last_id = left->ids[left->length - 1];
-    NodeAllocator_free(allocator, right);
+    TTreeNodeAllocator_free(allocator, right);
 }
 
 // Create an empty TTree.
@@ -271,7 +273,7 @@ TTree TTree_create(void) {
 }
 
 // Recursively free all nodes in node's subtree.
-static void __destroy_inner(NodeAllocator* allocator, Node* node) {
+static void __destroy_inner(TTreeNodeAllocator* allocator, TTreeNode* node) {
     if (node == NULL) {
         return;
     }
@@ -281,7 +283,7 @@ static void __destroy_inner(NodeAllocator* allocator, Node* node) {
     for (size_t i = 0; i < node->length; i++) {
         Row_destroy(&node->data[i]);
     }
-    NodeAllocator_free(allocator, node);
+    TTreeNodeAllocator_free(allocator, node);
 }
 
 // Remove and free all rows. The T-tree may be reused after calling this.
@@ -291,7 +293,7 @@ void TTree_destroy(TTree* tree) {
     }
     if (tree->node_allocator != NULL) {
         __destroy_inner(tree->node_allocator, tree->root);
-        NodeAllocator_destroy(tree->node_allocator);
+        TTreeNodeAllocator_destroy(tree->node_allocator);
     }
     *tree = TTree_create();
 }
@@ -300,15 +302,15 @@ void TTree_destroy(TTree* tree) {
 // Returns the new node at that took the place of `node`.
 //
 // See https://en.wikipedia.org/wiki/Tree_rotation#Illustration
-static Node* __leftRotate(Node* node) {
+static TTreeNode* __leftRotate(TTreeNode* node) {
     assert(node != NULL);
     assert(node->right != NULL);
-    Node* right = node->right;
-    Node* right_left = right->left;
+    TTreeNode* right = node->right;
+    TTreeNode* right_left = right->left;
     right->left = node;
     node->right = right_left;
-    __update_node_height(node);
-    __update_node_height(right);
+    __ttree_node_update_height(node);
+    __ttree_node_update_height(right);
     return right;
 }
 
@@ -316,15 +318,15 @@ static Node* __leftRotate(Node* node) {
 // Returns the new node at that took the place of `node`.
 //
 // See https://en.wikipedia.org/wiki/Tree_rotation#Illustration
-static Node* __rightRotate(Node* node) {
+static TTreeNode* __rightRotate(TTreeNode* node) {
     assert(node != NULL);
     assert(node->left != NULL);
-    Node* left = node->left;
-    Node* left_right = left->right;
+    TTreeNode* left = node->left;
+    TTreeNode* left_right = left->right;
     left->right = node;
     node->left = left_right;
-    __update_node_height(node);
-    __update_node_height(left);
+    __ttree_node_update_height(node);
+    __ttree_node_update_height(left);
     return left;
 }
 
@@ -333,10 +335,10 @@ static Node* __rightRotate(Node* node) {
 //
 // Wikipedia has a good visual explanation:
 // https://en.wikipedia.org/wiki/AVL_tree#Rebalancing
-static Node* __rebalance_subtree(Node* node) {
+static TTreeNode* __rebalance_subtree(TTreeNode* node) {
     assert(node != NULL);
-    if (__node_balance(node) > 1) {
-        if (__node_balance(node->left) >= 0) {
+    if (__ttree_node_balance_factor(node) > 1) {
+        if (__ttree_node_balance_factor(node->left) >= 0) {
             // Left left case
             return __rightRotate(node);
         } else {
@@ -345,8 +347,8 @@ static Node* __rebalance_subtree(Node* node) {
             return __rightRotate(node);
         }
     }
-    if (__node_balance(node) < -1) {
-        if (__node_balance(node->right) <= 0) {
+    if (__ttree_node_balance_factor(node) < -1) {
+        if (__ttree_node_balance_factor(node->right) <= 0) {
             // Right right case
             return __leftRotate(node);
         } else {
@@ -360,46 +362,46 @@ static Node* __rebalance_subtree(Node* node) {
 }
 
 // Pop the last node from the node trace and get the parent's pointer to it.
-static Node** __pop_node_get_pointer(TTree* tree, NodeList* node_trace) {
-    Node* node = NodeList_pop(node_trace);
-    Node* parent =
-        node_trace->length == 0 ? NULL : NodeList_get(node_trace, node_trace->length - 1);
-    Node** node_ptr = parent == NULL         ? &tree->root
-                      : node == parent->left ? &parent->left
-                                             : &parent->right;
+static TTreeNode** __pop_node_get_pointer(TTree* tree, TTreeNodeList* node_trace) {
+    TTreeNode* node = TTreeNodeList_pop(node_trace);
+    TTreeNode* parent =
+        node_trace->length == 0 ? NULL : TTreeNodeList_get(node_trace, node_trace->length - 1);
+    TTreeNode** node_ptr = parent == NULL         ? &tree->root
+                           : node == parent->left ? &parent->left
+                                                  : &parent->right;
     assert(*node_ptr == node);
     return node_ptr;
 }
 
-// Ensure that internal nodes have at least NODE_MIN_LEN items after rebalancing.
+// Ensure that internal nodes have at least TTREE_NODE_MIN_LEN items after rebalancing.
 // Does nothing if `node` is not an internal node.
-static void __ensure_min_len_after_rebalance(Node* node) {
+static void __ensure_min_len_after_rebalance(TTreeNode* node) {
     assert(node != NULL);
-    // Make sure internal nodes have at least NODE_MIN_LEN items
-    if (__node_kind(node) != NODEKIND_INTERNAL || node->length >= NODE_MIN_LEN) {
+    // Make sure internal nodes have at least TTREE_NODE_MIN_LEN items
+    if (__ttree_node_kind(node) != TTREE_NODEKIND_INTERNAL || node->length >= TTREE_NODE_MIN_LEN) {
         return;
     }
 
     // Otherwise, steal items from children
-    uint8_t needed_count = NODE_MIN_LEN - node->length;
+    uint8_t needed_count = TTREE_NODE_MIN_LEN - node->length;
     // Try left child
-    uint8_t steal_count = __min2(needed_count, __node_removable_count(node->left));
-    __node_move(node, 0, node->left, node->left->length - steal_count, steal_count);
+    uint8_t steal_count = __min2(needed_count, __ttree_node_removable_count(node->left));
+    __ttree_node_move(node, 0, node->left, node->left->length - steal_count, steal_count);
     needed_count -= steal_count;
     // Try right child
-    steal_count = __min2(needed_count, __node_removable_count(node->right));
-    __node_move(node, node->length, node->right, 0, steal_count);
+    steal_count = __min2(needed_count, __ttree_node_removable_count(node->right));
+    __ttree_node_move(node, node->length, node->right, 0, steal_count);
     needed_count -= steal_count;
 
-    assert(node->length >= NODE_MIN_LEN);
+    assert(node->length >= TTREE_NODE_MIN_LEN);
 }
 // Backtrack the node trace to rebalance the tree bottom-up.
 // This function ensures that the invariants of the T-tree are preserved.
-static void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
+static void __rebalance_from_node_trace(TTree* tree, TTreeNodeList* node_trace) {
     while (node_trace->length > 0) {
-        Node** node_ptr = __pop_node_get_pointer(tree, node_trace);
-        Node* node = *node_ptr;
-        __update_node_height(node);
+        TTreeNode** node_ptr = __pop_node_get_pointer(tree, node_trace);
+        TTreeNode* node = *node_ptr;
+        __ttree_node_update_height(node);
         *node_ptr = __rebalance_subtree(node);
         if (*node_ptr != node) {
             // Only one rebalance is needed to rebalance the whole tree
@@ -410,7 +412,7 @@ static void __rebalance_from_node_trace(TTree* tree, NodeList* node_trace) {
 }
 
 // Linear search for the position to insert `id` into the sorted array `ids` of length `ids_len`.
-// For a NODE_SIZE of 38, this appears to be slightly faster than binary search.
+// For a TTREE_NODE_SIZE of 38, this appears to be slightly faster than binary search.
 static size_t __linear_search(ID* ids, size_t ids_len, ID id) {
     // Perhaps the compiler already does it, but manually using SIMD instructions
     // seems to make no performance difference.
@@ -427,13 +429,13 @@ static size_t __linear_search(ID* ids, size_t ids_len, ID id) {
 // Asserts that the tree is not empty.
 //
 // Returns whether the ID already exists.
-static bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t* out_pos) {
+static bool __get_bounding(const TTree* tree, ID id, TTreeNodeList* out_nodes, size_t* out_pos) {
     assert(tree->root != NULL);
 
     // Search for bounding node, starting at root
-    Node* node = tree->root;
+    TTreeNode* node = tree->root;
     while (node != NULL) {
-        NodeList_append_assume_capacity(out_nodes, node);
+        TTreeNodeList_append_assume_capacity(out_nodes, node);
         size_t node_len = node->length;
         assert(node_len > 0);
         // id is too big, go right
@@ -455,7 +457,7 @@ static bool __get_bounding(const TTree* tree, ID id, NodeList* out_nodes, size_t
 
     // No bounding node, insert it to the left or right side of the last node visited
     assert(out_nodes->length > 0);
-    Node* last_node = NodeList_get(out_nodes, out_nodes->length - 1);
+    TTreeNode* last_node = TTreeNodeList_get(out_nodes, out_nodes->length - 1);
     bool insert_left = id < last_node->ids[0];
     *out_pos = insert_left ? 0 : last_node->length;
     return false;
@@ -471,12 +473,12 @@ Row* TTree_get(const TTree* tree, ID id) {
         return NULL;
     }
 
-    Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
+    TTreeNode* node_trace_buf[TTREE_NODE_TRACE_LEN];
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(node_trace_buf, TTREE_NODE_TRACE_LEN);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
     if (exists) {
-        Node* node = NodeList_get(&node_trace, node_trace.length - 1);
+        TTreeNode* node = TTreeNodeList_get(&node_trace, node_trace.length - 1);
         return &node->data[pos];
     }
     return NULL;
@@ -490,20 +492,20 @@ Row* TTree_get(const TTree* tree, ID id) {
 // where n is the number of nodes in `tree`.
 bool TTree_insert(TTree* tree, ID id, const Row* row) {
     if (tree->node_allocator == NULL) {
-        tree->node_allocator = NodeAllocator_create();
+        tree->node_allocator = TTreeNodeAllocator_create();
     }
     if (tree->root == NULL) {
-        tree->root = __node_create(tree->node_allocator);
-        __node_insert(tree->root, 0, id, Row_dupe(row));
+        tree->root = __ttree_node_create(tree->node_allocator);
+        __ttree_node_insert(tree->root, 0, id, Row_dupe(row));
         return true;
     }
 
     // Find the node to insert into
-    Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
+    TTreeNode* node_trace_buf[TTREE_NODE_TRACE_LEN];
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(node_trace_buf, TTREE_NODE_TRACE_LEN);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
-    Node* node = NodeList_get(&node_trace, node_trace.length - 1);
+    TTreeNode* node = TTreeNodeList_get(&node_trace, node_trace.length - 1);
     if (exists) {
         return false;
     }
@@ -511,18 +513,18 @@ bool TTree_insert(TTree* tree, ID id, const Row* row) {
     // Insert row into node
     size_t node_len = node->length;
     assert(node_len > 0);
-    if (node_len < NODE_SIZE) {
+    if (node_len < TTREE_NODE_SIZE) {
         // There's space, insert it here
-        __node_insert(node, pos, id, Row_dupe(row));
+        __ttree_node_insert(node, pos, id, Row_dupe(row));
         return true;
     }
 
     // No more space, create a new node if id is out of range
-    if (pos == 0 || pos == NODE_SIZE) {
-        Node** node_ptr = pos == 0 ? &node->left : &node->right;
+    if (pos == 0 || pos == TTREE_NODE_SIZE) {
+        TTreeNode** node_ptr = pos == 0 ? &node->left : &node->right;
         assert(*node_ptr == NULL);
-        *node_ptr = __node_create(tree->node_allocator);
-        __node_insert(*node_ptr, 0, id, Row_dupe(row));
+        *node_ptr = __ttree_node_create(tree->node_allocator);
+        __ttree_node_insert(*node_ptr, 0, id, Row_dupe(row));
         __rebalance_from_node_trace(tree, &node_trace);
         return true;
     }
@@ -530,20 +532,20 @@ bool TTree_insert(TTree* tree, ID id, const Row* row) {
     // No more space, displace the smallest ID
     ID removed_id;
     Row removed_row;
-    __node_insert_removing_first(node, pos, id, Row_dupe(row), &removed_id, &removed_row);
+    __ttree_node_insert_removing_first(node, pos, id, Row_dupe(row), &removed_id, &removed_row);
 
     // Insert the removed id into the left subtree
     if (node->left == NULL) {
-        node->left = __node_create(tree->node_allocator);
+        node->left = __ttree_node_create(tree->node_allocator);
     }
-    Node* child = node->left;
+    TTreeNode* child = node->left;
     while (child->right != NULL) {
-        NodeList_append_assume_capacity(&node_trace, child);
+        TTreeNodeList_append_assume_capacity(&node_trace, child);
         child = child->right;
     }
-    if (child->length < NODE_SIZE) {
+    if (child->length < TTREE_NODE_SIZE) {
         // We have space, insert it
-        __node_insert(child, child->length, removed_id, removed_row);
+        __ttree_node_insert(child, child->length, removed_id, removed_row);
         if (child->length > 1) {
             // No new node created, no need to rebalance
             return true;
@@ -551,11 +553,11 @@ bool TTree_insert(TTree* tree, ID id, const Row* row) {
     } else {
         // There is no space in the left subtree, insert it further down
         assert(child->right == NULL);
-        child->right = __node_create(tree->node_allocator);
-        __node_insert(child->right, 0, removed_id, removed_row);
+        child->right = __ttree_node_create(tree->node_allocator);
+        __ttree_node_insert(child->right, 0, removed_id, removed_row);
         // Child was already balanced, we don't need to balance it again
-        assert(__node_height(child->left) <= 1);
-        __update_node_height(child);
+        assert(__ttree_node_height(child->left) <= 1);
+        __ttree_node_update_height(child);
     }
 
     __rebalance_from_node_trace(tree, &node_trace);
@@ -564,15 +566,16 @@ bool TTree_insert(TTree* tree, ID id, const Row* row) {
 
 // Rebalance the subtree after a row was removed. `node_ptr` must point to a non-internal
 // (i.e., leaf or half-leaf) node. Return whether a node was deleted.
-static bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node** node_ptr) {
-    Node* node = *node_ptr;
+static bool __rebalance_after_remove_non_internal(TTreeNodeAllocator* allocator,
+                                                  TTreeNode** node_ptr) {
+    TTreeNode* node = *node_ptr;
     assert(node != NULL);
-    assert(__node_kind(node) != NODEKIND_INTERNAL);
+    assert(__ttree_node_kind(node) != TTREE_NODEKIND_INTERNAL);
 
-    if (__node_kind(node) == NODEKIND_LEAF) {
+    if (__ttree_node_kind(node) == TTREE_NODEKIND_LEAF) {
         // Delete if empty
         if (node->length == 0) {
-            NodeAllocator_free(allocator, node);
+            TTreeNodeAllocator_free(allocator, node);
             *node_ptr = NULL;
             return true;
         }
@@ -580,10 +583,10 @@ static bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node
     }
 
     // Half-leaf node case, try to merge with child
-    Node* child = node->left != NULL ? node->left : node->right;
+    TTreeNode* child = node->left != NULL ? node->left : node->right;
     // Balance factor cannot exceed +-1, so child must be a leaf node
-    assert(__node_kind(child) == NODEKIND_LEAF);
-    if (node->length + child->length > NODE_SIZE) {
+    assert(__ttree_node_kind(child) == TTREE_NODEKIND_LEAF);
+    if (node->length + child->length > TTREE_NODE_SIZE) {
         // Not enough space to merge
         return false;
     }
@@ -594,45 +597,45 @@ static bool __rebalance_after_remove_non_internal(NodeAllocator* allocator, Node
         child = node;
         node = *node_ptr;
     }
-    __node_merge(allocator, node, child);
+    __ttree_node_merge(allocator, node, child);
 
     // We deleted the only child, this is now a leaf node
     node->left = NULL;
     node->right = NULL;
 
-    __update_node_height(node);
+    __ttree_node_update_height(node);
     *node_ptr = __rebalance_subtree(node);
     return true;
 }
 
 // Rebalance the subtree after a row was removed. `node` must be an internal node.
 // Returns whether a node was deleted.
-static bool __rebalance_after_remove_internal(NodeAllocator* allocator, Node* node,
-                                              NodeList* node_trace) {
+static bool __rebalance_after_remove_internal(TTreeNodeAllocator* allocator, TTreeNode* node,
+                                              TTreeNodeList* node_trace) {
     assert(node != NULL);
-    assert(__node_kind(node) == NODEKIND_INTERNAL);
+    assert(__ttree_node_kind(node) == TTREE_NODEKIND_INTERNAL);
     // Ensure min length
-    if (node->length >= NODE_MIN_LEN) {
+    if (node->length >= TTREE_NODE_MIN_LEN) {
         return false;
     }
 
     // Otherwise, steal the largest ID from the left subtree
-    Node* child = node->left;
+    TTreeNode* child = node->left;
     size_t subtree_start = node_trace->length;
     while (child->right != NULL) {
-        NodeList_append_assume_capacity(node_trace, child);
+        TTreeNodeList_append_assume_capacity(node_trace, child);
         child = child->right;
     }
 
     ID removed_id;
     Row removed_row;
-    __node_remove(child, child->length - 1, &removed_id, &removed_row);
-    __node_insert(node, 0, removed_id, removed_row);
+    __ttree_node_remove(child, child->length - 1, &removed_id, &removed_row);
+    __ttree_node_insert(node, 0, removed_id, removed_row);
 
     // Rebalance the child
-    Node** child_ptr = node_trace->length == subtree_start
-                           ? &node->left
-                           : &NodeList_get(node_trace, node_trace->length - 1)->right;
+    TTreeNode** child_ptr = node_trace->length == subtree_start
+                                ? &node->left
+                                : &TTreeNodeList_get(node_trace, node_trace->length - 1)->right;
     return __rebalance_after_remove_non_internal(allocator, child_ptr);
 }
 
@@ -646,11 +649,11 @@ bool TTree_remove(TTree* tree, ID id) {
     }
 
     // Find the node to remove from
-    Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
+    TTreeNode* node_trace_buf[TTREE_NODE_TRACE_LEN];
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(node_trace_buf, TTREE_NODE_TRACE_LEN);
     size_t pos;
     bool exists = __get_bounding(tree, id, &node_trace, &pos);
-    Node* node = NodeList_get(&node_trace, node_trace.length - 1);
+    TTreeNode* node = TTreeNodeList_get(&node_trace, node_trace.length - 1);
     if (!exists) {
         return false;
     }
@@ -659,16 +662,16 @@ bool TTree_remove(TTree* tree, ID id) {
     {
         ID removed_id;
         Row removed_row;
-        __node_remove(node, pos, &removed_id, &removed_row);
+        __ttree_node_remove(node, pos, &removed_id, &removed_row);
         Row_destroy(&removed_row);
     }
 
     // Rebalance the tree
     bool node_deleted;
-    if (__node_kind(node) == NODEKIND_INTERNAL) {
+    if (__ttree_node_kind(node) == TTREE_NODEKIND_INTERNAL) {
         node_deleted = __rebalance_after_remove_internal(tree->node_allocator, node, &node_trace);
     } else {
-        Node** node_ptr = __pop_node_get_pointer(tree, &node_trace);
+        TTreeNode** node_ptr = __pop_node_get_pointer(tree, &node_trace);
         node_deleted = __rebalance_after_remove_non_internal(tree->node_allocator, node_ptr);
     }
     if (node_deleted) {
@@ -680,7 +683,7 @@ bool TTree_remove(TTree* tree, ID id) {
 // See `TTree_iter_start` and `TTree_iter_next`.
 typedef struct {
     // Stack of nodes from the root to the current node.
-    Node* node_trace[NODE_TRACE_SIZE];
+    TTreeNode* node_trace[TTREE_NODE_TRACE_LEN];
     // Number of nodes in `node_trace`.
     uint8_t node_trace_len;
     // Position within the current node.
@@ -693,11 +696,11 @@ typedef struct {
 // The iterator is invalidated if the TTree is modified.
 TTreeIter TTree_iter_start(const TTree* tree) {
     TTreeIter iter;
-    NodeList node_trace = NodeList_from_buffer(iter.node_trace, NODE_TRACE_SIZE);
-    Node* node = tree->root;
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(iter.node_trace, TTREE_NODE_TRACE_LEN);
+    TTreeNode* node = tree->root;
     // Smallest ID is all the way to the left
     while (node != NULL) {
-        NodeList_append_assume_capacity(&node_trace, node);
+        TTreeNodeList_append_assume_capacity(&node_trace, node);
         node = node->left;
     }
     iter.node_trace_len = node_trace.length;
@@ -713,11 +716,11 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
     if (iter->node_trace_len == 0) {
         return false;
     }
-    NodeList node_trace = NodeList_from_buffer(iter->node_trace, NODE_TRACE_SIZE);
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(iter->node_trace, TTREE_NODE_TRACE_LEN);
     node_trace.length = iter->node_trace_len;
 
     // Go to the next position in the current node
-    Node* node = NodeList_get(&node_trace, node_trace.length - 1);
+    TTreeNode* node = TTreeNodeList_get(&node_trace, node_trace.length - 1);
     *out_id = node->ids[iter->pos];
     *out_row = &node->data[iter->pos];
     if (++iter->pos < node->length) {
@@ -730,7 +733,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
     if (node->right != NULL) {
         node = node->right;
         while (node != NULL) {
-            NodeList_append(&node_trace, node);
+            TTreeNodeList_append(&node_trace, node);
             node = node->left;
         }
         iter->node_trace_len = node_trace.length;
@@ -740,12 +743,12 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
     // Otherwise, go up until we find a node where we came from the left subtree.
     // That node's subtree will contain the next largest ID.
     while (true) {
-        Node* node = NodeList_pop(&node_trace);
+        TTreeNode* node = TTreeNodeList_pop(&node_trace);
         // We iterated all the nodes
         if (node_trace.length == 0) {
             break;
         }
-        Node* parent = NodeList_get(&node_trace, node_trace.length - 1);
+        TTreeNode* parent = TTreeNodeList_get(&node_trace, node_trace.length - 1);
         if (parent->left == node) {
             // Left subtree finished, the parent contains the next largest ID.
             // Conveniently the parent is already the last item in the list.
@@ -760,7 +763,7 @@ bool TTree_iter_next(TTreeIter* iter, ID* out_id, Row** out_row) {
 
 // Contains the state of a bulk insert operation.
 typedef struct {
-    Node* current;
+    TTreeNode* current;
     TTree tree;
 } TTreeBulkInsert;
 
@@ -779,7 +782,7 @@ TTreeBulkInsert TTree_bulk_insert_start(void) {
 // Should be called during a bulk insert when a node is full or is the last node.
 //
 // Updates the node's last_id and inserts it into the tree, balancing as necessary.
-static void __bulk_insert_finish_node(Node* node, TTree* tree) {
+static void __bulk_insert_finish_node(TTreeNode* node, TTree* tree) {
     assert(node != NULL);
     assert(node->length > 0);
     node->last_id = node->ids[node->length - 1];
@@ -788,16 +791,16 @@ static void __bulk_insert_finish_node(Node* node, TTree* tree) {
         return;
     }
 
-    Node* node_trace_buf[NODE_TRACE_SIZE];
-    NodeList node_trace = NodeList_from_buffer(node_trace_buf, NODE_TRACE_SIZE);
+    TTreeNode* node_trace_buf[TTREE_NODE_TRACE_LEN];
+    TTreeNodeList node_trace = TTreeNodeList_from_buffer(node_trace_buf, TTREE_NODE_TRACE_LEN);
     // Get the node with the largest ID, which is all the way to the right
-    Node* trace = tree->root;
+    TTreeNode* trace = tree->root;
     while (trace != NULL) {
-        NodeList_append_assume_capacity(&node_trace, trace);
+        TTreeNodeList_append_assume_capacity(&node_trace, trace);
         trace = trace->right;
     }
 
-    Node* parent = NodeList_get(&node_trace, node_trace.length - 1);
+    TTreeNode* parent = TTreeNodeList_get(&node_trace, node_trace.length - 1);
     assert(parent->last_id < node->ids[0]);
     parent->right = node;
     __rebalance_from_node_trace(tree, &node_trace);
@@ -807,23 +810,23 @@ static void __bulk_insert_finish_node(Node* node, TTree* tree) {
 // `id` must be larger than all previously inserted IDs.
 void TTree_bulk_insert(TTreeBulkInsert* bulk, ID id, Row* row) {
     if (bulk->tree.node_allocator == NULL) {
-        bulk->tree.node_allocator = NodeAllocator_create();
+        bulk->tree.node_allocator = TTreeNodeAllocator_create();
     }
     if (bulk->current == NULL) {
-        bulk->current = __node_create(bulk->tree.node_allocator);
-        __node_insert(bulk->current, 0, id, Row_dupe(row));
+        bulk->current = __ttree_node_create(bulk->tree.node_allocator);
+        __ttree_node_insert(bulk->current, 0, id, Row_dupe(row));
         return;
     }
 
-    Node* node = bulk->current;
+    TTreeNode* node = bulk->current;
     assert(node->ids[node->length - 1] < id);
     // Insert the id and row into the node
-    // Don't use __node_insert as we can defer updating the last_id
+    // Don't use __ttree_node_insert as we can defer updating the last_id
     node->ids[node->length] = id;
     node->data[node->length] = Row_dupe(row);
     node->length++;
     // If node is full, finish it and create a new node
-    if (node->length == NODE_SIZE) {
+    if (node->length == TTREE_NODE_SIZE) {
         __bulk_insert_finish_node(node, &bulk->tree);
         bulk->current = NULL;
     }

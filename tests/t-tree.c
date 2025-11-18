@@ -13,7 +13,7 @@
         if (iter.node_trace_len == 0) {                                                            \
             break;                                                                                 \
         }                                                                                          \
-        Node* node = iter.node_trace[iter.node_trace_len - 1];                                     \
+        TTreeNode* node = iter.node_trace[iter.node_trace_len - 1];                                \
         EXPECT(node->length > 0);                                                                  \
         EXPECT(node->last_id == node->ids[node->length - 1]);                                      \
         /* All IDs in a node's left subtree are less than the node's smallest ID. */               \
@@ -24,12 +24,12 @@
         if (node->right != NULL) {                                                                 \
             EXPECT(node->last_id < node->right->ids[0]);                                           \
         }                                                                                          \
-        /* Internal nodes contain at least NODE_MIN_LEN items. */                                  \
-        if (__node_kind(node) == NODEKIND_INTERNAL) {                                              \
-            EXPECT(node->length >= NODE_MIN_LEN);                                                  \
+        /* Internal nodes contain at least TTREE_NODE_MIN_LEN items. */                            \
+        if (__ttree_node_kind(node) == TTREE_NODEKIND_INTERNAL) {                                  \
+            EXPECT(node->length >= TTREE_NODE_MIN_LEN);                                            \
         }                                                                                          \
         /* The height difference between a node's 2 children is at most 1. */                      \
-        EXPECT(__node_balance(node) >= -1 && __node_balance(node) <= 1);                           \
+        EXPECT(__ttree_node_balance_factor(node) >= -1 && __ttree_node_balance_factor(node) <= 1); \
     } while (0)
 
 int id_compare(const void* a, const void* b) {
@@ -44,8 +44,8 @@ int id_compare(const void* a, const void* b) {
     }
 }
 
-Node* create_fake_node(NodeAllocator* allocator, uint8_t height) {
-    Node* node = __node_create(allocator);
+TTreeNode* create_fake_node(TTreeNodeAllocator* allocator, uint8_t height) {
+    TTreeNode* node = __ttree_node_create(allocator);
     node->length = 1;
     node->height = height;
     return node;
@@ -263,7 +263,7 @@ TEST ttree_rebalance(void) {
     START_TEST("T-tree rebalance");
 
     TTree tree = TTree_create();
-    tree.node_allocator = NodeAllocator_create();
+    tree.node_allocator = TTreeNodeAllocator_create();
 
     tree.root = create_fake_node(tree.node_allocator, 4);
     tree.root->left = create_fake_node(tree.node_allocator, 3);
@@ -288,8 +288,8 @@ TEST ttree_rebalance(void) {
     ID id;
     Row* row;
     while (TTree_iter_next(&it, &id, &row)) {
-        Node* node = it.node_trace_len == 0 ? tree.root : it.node_trace[it.node_trace_len - 1];
-        int8_t balance = __node_balance(node);
+        TTreeNode* node = it.node_trace_len == 0 ? tree.root : it.node_trace[it.node_trace_len - 1];
+        int8_t balance = __ttree_node_balance_factor(node);
         EXPECT(balance >= -1);
         EXPECT(balance <= 1);
     }
