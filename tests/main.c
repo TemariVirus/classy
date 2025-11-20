@@ -29,6 +29,9 @@ int main(void) {
     tokenizer_int_and_float();
     tokenizer_string();
     tokenizer_mixed();
+    tokenizer_string_bad_escape();
+    tokenizer_open_cmd();
+    tokenizer_missing_spaces();
 
     print_test_summary();
     return 0;

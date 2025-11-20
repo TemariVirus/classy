@@ -32,8 +32,12 @@ TEST tokenizer_unkown(void) {
     }
 
     {
-        char line[] = "SHOW ALLa";
+        char line[] = "SHOW ALL name";
         Tokenizer tokenizer = Tokenizer_create(line);
+
+        Token token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
+        EXPECT_INT_EQUAL(CMD_SHOW_ALL, token.data.cmd);
         EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
         EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
     }
@@ -177,6 +181,97 @@ TEST tokenizer_mixed(void) {
         EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
         EXPECT_INT_EQUAL(CMD_QUERY, token.data.cmd);
 
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    END_TEST();
+}
+
+TEST tokenizer_string_bad_escape(void) {
+    START_TEST("tokenizer string");
+
+    {
+        char line[] = R"("ac\n dea")";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    {
+        char line[] = R"("ac\\\r dea")";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    {
+        char line[] = R"(SHOW ALL"ac\" \ dea")";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        EXPECT_INT_EQUAL(TOKEN_CMD, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    END_TEST();
+}
+
+TEST tokenizer_open_cmd(void) {
+    START_TEST("tokenizer open cmd");
+
+    {
+        char line[] = R"(OPEN abcd efg)";
+        Tokenizer tokenizer = Tokenizer_create(line);
+
+        Token token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
+        EXPECT_INT_EQUAL(CMD_OPEN, token.data.cmd);
+        token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
+        EXPECT_STRING_EQUAL(R"(abcd efg)", token.data.s);
+
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    {
+        char line[] = R"(OPEN "abcd \\ \"efg")";
+        Tokenizer tokenizer = Tokenizer_create(line);
+
+        Token token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
+        EXPECT_INT_EQUAL(CMD_OPEN, token.data.cmd);
+        token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
+        EXPECT_STRING_EQUAL(R"("abcd \\ \"efg")", token.data.s);
+
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    END_TEST();
+}
+
+TEST tokenizer_missing_spaces(void) {
+    START_TEST("tokenizer missing spaces");
+
+    {
+        char line[] = "SHOW ALLID = 20";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    {
+        char line[] = "SHOW ALL\"abc\"INName";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        // SHOW ALL
+        Token token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
+        EXPECT_INT_EQUAL(CMD_SHOW_ALL, token.data.cmd);
+        // "abc"
+        token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
+        EXPECT_STRING_EQUAL("abc", token.data.s);
+        // INName
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
         EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
     }
 
