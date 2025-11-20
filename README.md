@@ -101,7 +101,7 @@ UPDATE ID=id column=value...
 Updates the values of the other columns in the row with the specified `ID`, if it exists.
 
 The columns may be in any order, but cannot appear more than once.
-The `ID` column is required. The other columns are optional.
+The `ID` column is required. The other columns are optional, but at least one must be specified.
 
 `value` follows the same constraints as in `INSERT`.
 

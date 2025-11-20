@@ -101,23 +101,31 @@ bool __str_skip(char** str, const char* prefix) {
 // Updates `str` to point to the character after the command name.
 // If no command name is found, `str` is set to NULL.
 CommandTag str_to_commandtag(char** str) {
+    CommandTag cmd;
     if (__str_skip(str, "OPEN")) {
-        return CMD_OPEN;
+        cmd = CMD_OPEN;
     } else if (__str_skip(str, "SHOW ALL")) {
-        return CMD_SHOW_ALL;
+        cmd = CMD_SHOW_ALL;
     } else if (__str_skip(str, "SHOW SUMMARY")) {
-        return CMD_SHOW_SUMMARY;
+        cmd = CMD_SHOW_SUMMARY;
     } else if (__str_skip(str, "INSERT")) {
-        return CMD_INSERT;
+        cmd = CMD_INSERT;
     } else if (__str_skip(str, "QUERY")) {
-        return CMD_QUERY;
+        cmd = CMD_QUERY;
     } else if (__str_skip(str, "UPDATE")) {
-        return CMD_UPDATE;
+        cmd = CMD_UPDATE;
     } else if (__str_skip(str, "DELETE")) {
-        return CMD_DELETE;
+        cmd = CMD_DELETE;
     } else if (__str_skip(str, "SAVE")) {
-        return CMD_SAVE;
+        cmd = CMD_SAVE;
+    } else {
+        goto fail;
     }
+    if (!isalpha(*str[0])) {
+        return cmd;
+    }
+
+fail:
     *str = NULL;
     return (CommandTag)0;
 }
@@ -141,15 +149,23 @@ const char* Column_name(Column column) {
 // Updates `str` to point to the character after the column name.
 // If no column name is found, `str` is set to NULL.
 Column str_to_column(char** str) {
+    Column col;
     if (__str_skip(str, Column_name(COLUMN_ID))) {
-        return COLUMN_ID;
+        col = COLUMN_ID;
     } else if (__str_skip(str, Column_name(COLUMN_NAME))) {
-        return COLUMN_NAME;
+        col = COLUMN_NAME;
     } else if (__str_skip(str, Column_name(COLUMN_PROGRAMME))) {
-        return COLUMN_PROGRAMME;
+        col = COLUMN_PROGRAMME;
     } else if (__str_skip(str, Column_name(COLUMN_MARK))) {
-        return COLUMN_MARK;
+        col = COLUMN_MARK;
+    } else {
+        goto fail;
     }
+    if (!isalpha(*str[0])) {
+        return col;
+    }
+
+fail:
     *str = NULL;
     return (Column)0;
 }
@@ -188,25 +204,43 @@ SortBy str_to_sortby(char** str) {
 // Updates `str` to point to the character after the operator.
 // If no operator is found, `str` is set to NULL.
 OpTag str_to_optag(char** str) {
+    OpTag op;
+    bool allow_alpha_after;
     if (__str_skip(str, "(")) {
-        return OP_LPAREN;
+        allow_alpha_after = true;
+        op = OP_LPAREN;
     } else if (__str_skip(str, ")")) {
-        return OP_RPAREN;
+        allow_alpha_after = true;
+        op = OP_RPAREN;
     } else if (__str_skip(str, "=")) {
-        return OP_EQ;
+        allow_alpha_after = true;
+        op = OP_EQ;
     } else if (__str_skip(str, ">")) {
-        return OP_GT;
+        allow_alpha_after = true;
+        op = OP_GT;
     } else if (__str_skip(str, "<")) {
-        return OP_LT;
+        allow_alpha_after = true;
+        op = OP_LT;
     } else if (__str_skip(str, "IN")) {
-        return OP_IN;
+        allow_alpha_after = false;
+        op = OP_IN;
     } else if (__str_skip(str, "NOT")) {
-        return OP_NOT;
+        allow_alpha_after = false;
+        op = OP_NOT;
     } else if (__str_skip(str, "AND")) {
-        return OP_AND;
+        allow_alpha_after = false;
+        op = OP_AND;
     } else if (__str_skip(str, "OR")) {
-        return OP_OR;
+        allow_alpha_after = false;
+        op = OP_OR;
+    } else {
+        goto fail;
     }
+    if (allow_alpha_after || !isalpha(*str[0])) {
+        return op;
+    }
+
+fail:
     *str = NULL;
     return (OpTag)0;
 }
@@ -222,6 +256,12 @@ uint32_t str_to_int(char** str) {
         *str = NULL;
         return 0;
     }
+    // If one of these characters follows, it's a float
+    if (strchr(".eE", end[0])) {
+        *str = NULL;
+        return 0;
+    }
+
     *str = end;
     return (uint32_t)val;
 }
@@ -316,8 +356,7 @@ Token Tokenizer_next(Tokenizer* tokenizer) {
     // Integer
     end = tokenizer->current;
     uint32_t int_val = str_to_int(&end);
-    // If there was a trailing '.', this is a float, not an int
-    if (end != NULL && end[0] != '.') {
+    if (end != NULL) {
         tokenizer->current = end;
         return (Token){.type = TOKEN_INT, .data.ui = int_val};
     }
