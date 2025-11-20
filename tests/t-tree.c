@@ -73,21 +73,21 @@ TEST ttree_get(void) {
         EXPECT(row != NULL);
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
-        EXPECT_FLOAT_EQUAL(0, row->mark);
+        EXPECT_FLOAT_EQUAL((float)0, row->mark);
     }
     {
         Row* row = TTree_get(&tree, 500);
         EXPECT(row != NULL);
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
-        EXPECT_FLOAT_EQUAL(500, row->mark);
+        EXPECT_FLOAT_EQUAL((float)500, row->mark);
     }
     {
         Row* row = TTree_get(&tree, 999);
         EXPECT(row != NULL);
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
-        EXPECT_FLOAT_EQUAL(999, row->mark);
+        EXPECT_FLOAT_EQUAL((float)999, row->mark);
     }
     {
         Row* row = TTree_get(&tree, 1000);
@@ -132,7 +132,7 @@ TEST ttree_insert(void) {
         EXPECT_INT_EQUAL(i, id);
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
-        EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_FLOAT_EQUAL((float)i, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
@@ -164,7 +164,7 @@ TEST ttree_insert_duplicate(void) {
         EXPECT_INT_EQUAL(i, id);
         EXPECT_STRING_EQUAL("test", row->name);
         EXPECT_STRING_EQUAL("", row->programme);
-        EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_FLOAT_EQUAL((float)i, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
@@ -197,7 +197,7 @@ TEST ttree_remove(void) {
         EXPECT_INT_EQUAL(i, id);
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("6969", row->programme);
-        EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_FLOAT_EQUAL((float)i, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
@@ -250,7 +250,7 @@ TEST ttree_remove_random(void) {
         EXPECT_INT_EQUAL(expected_id, id);
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("6969", row->programme);
-        EXPECT_FLOAT_EQUAL(expected_id, row->mark);
+        EXPECT_FLOAT_EQUAL((float)expected_id, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));
@@ -343,7 +343,7 @@ TEST ttree_bulk_insert(void) {
         EXPECT_INT_EQUAL(i, id);
         EXPECT_STRING_EQUAL("", row->name);
         EXPECT_STRING_EQUAL("test", row->programme);
-        EXPECT_FLOAT_EQUAL(i, row->mark);
+        EXPECT_FLOAT_EQUAL((float)i, row->mark);
         EXPECT_NODE_INVARIANTS(it);
     }
     EXPECT(!TTree_iter_next(&it, &id, &row));

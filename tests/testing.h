@@ -69,10 +69,12 @@ void print_test_header(const char* file, int line, const char* test_name) {
 
 #define EXPECT_INT_EQUAL(expected, actual)                                                         \
     do {                                                                                           \
-        if ((expected) != (actual)) {                                                              \
+        long long exp = (expected);                                                                \
+        long long act = (actual);                                                                  \
+        if (exp != act) {                                                                          \
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
-            printf("Expected %lli, found %lli\n", (long long)(expected), (long long)(actual));     \
+            printf("Expected %lli, found %lli\n", exp, act);                                       \
             print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_INT_EQUAL(%s, %s)\n", #expected, #actual);                          \
             print_colored(COLOR_GREEN, "    ^\n");                                                 \
@@ -82,10 +84,12 @@ void print_test_header(const char* file, int line, const char* test_name) {
 
 #define EXPECT_FLOAT_EQUAL(expected, actual)                                                       \
     do {                                                                                           \
-        if ((expected) != (actual)) {                                                              \
+        double exp = (expected);                                                                   \
+        double act = (actual);                                                                     \
+        if (exp != act) {                                                                          \
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
-            printf("Expected %.17g, found %.17g\n", (double)(expected), (double)(actual));         \
+            printf("Expected %.17g, found %.17g\n", exp, act);                                     \
             print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_FLOAT_EQUAL(%s, %s)\n", #expected, #actual);                        \
             print_colored(COLOR_GREEN, "    ^\n");                                                 \
@@ -95,11 +99,13 @@ void print_test_header(const char* file, int line, const char* test_name) {
 
 #define EXPECT_STRING_EQUAL(expected, actual)                                                      \
     do {                                                                                           \
-        if (strcmp((expected), (actual)) != 0) {                                                   \
+        char* exp = (expected);                                                                    \
+        char* act = (actual);                                                                      \
+        if (strcmp(exp, act) != 0) {                                                               \
             tests_failed++;                                                                        \
             printf("\n");                                                                          \
-            printf("Expected \"%s\"\n", (expected));                                               \
-            printf("Found    \"%s\"\n", (actual));                                                 \
+            printf("Expected \"%s\"\n", exp);                                                      \
+            printf("Found    \"%s\"\n", act);                                                      \
             print_test_header(__FILE__, __LINE__, test_name);                                      \
             printf("    EXPECT_STRING_EQUAL(%s, %s)\n", #expected, #actual);                       \
             print_colored(COLOR_GREEN, "    ^\n");                                                 \
