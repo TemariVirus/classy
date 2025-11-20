@@ -74,7 +74,7 @@ typedef union {
 } TokenData;
 
 typedef struct {
-    TokenTag type;
+    TokenTag tag;
     TokenData data;
 } Token;
 
@@ -88,8 +88,8 @@ typedef struct {
     bool take_filename_and_end;
 } Tokenizer;
 
-// If `*str` starts with `prefix`, advances `*str` past the prefix and returns true.
-// Otherwise, `*str` is unchanged and returns false.
+// If `*str` starts with `prefix`, advances `*str` past the prefix and returns
+// true. Otherwise, `*str` is unchanged and returns false.
 bool __str_skip(char** str, const char* prefix) {
     size_t prefix_len = strlen(prefix);
     if (strncmp(*str, prefix, prefix_len) == 0) {
@@ -286,7 +286,7 @@ float str_to_float(char** str) {
 // See `Tokenizer_next`.
 static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     if (tokenizer->current == NULL) {
-        return (Token){.type = TOKEN_EOF};
+        return (Token){.tag = TOKEN_EOF};
     }
     // Ignore whitespace between tokens
     while (isspace(tokenizer->current[0])) {
@@ -295,11 +295,12 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     // End of input string
     if (tokenizer->current[0] == '\0') {
         tokenizer->current = NULL;
-        return (Token){.type = TOKEN_EOF};
+        return (Token){.tag = TOKEN_EOF};
     }
     // Filenames are not escaped or quoted
     if (tokenizer->take_filename_and_end) {
-        Token token = (Token){.type = TOKEN_STRING, .data.s = tokenizer->current};
+        Token token =
+            (Token){.tag = TOKEN_STRING, .data.s = tokenizer->current};
         tokenizer->current = NULL;
         return token;
     }
@@ -307,12 +308,12 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     if (tokenizer->current[0] == '"') {
         char* escaped = read_escaped_string(&tokenizer->current);
         if (escaped == NULL) {
-            Token token = {.type = TOKEN_UNK, .data.unk = tokenizer->current};
+            Token token = {.tag = TOKEN_UNK, .data.unk = tokenizer->current};
             tokenizer->current = NULL;
             return token;
         }
         return (Token){
-            .type = TOKEN_STRING,
+            .tag = TOKEN_STRING,
             .data.s = escaped,
         };
     }
@@ -325,46 +326,46 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
         if (cmd == CMD_OPEN || cmd == CMD_SAVE) {
             tokenizer->take_filename_and_end = true;
         }
-        return (Token){.type = TOKEN_CMD, .data.cmd = cmd};
+        return (Token){.tag = TOKEN_CMD, .data.cmd = cmd};
     }
     // Column
     end = tokenizer->current;
     Column col = str_to_column(&end);
     if (end != NULL) {
         tokenizer->current = end;
-        return (Token){.type = TOKEN_COLUMN, .data.col = col};
+        return (Token){.tag = TOKEN_COLUMN, .data.col = col};
     }
     // Sort by
     end = tokenizer->current;
     SortBy sort_by = str_to_sortby(&end);
     if (end != NULL) {
         tokenizer->current = end;
-        return (Token){.type = TOKEN_SORT_BY, .data.sort_by = sort_by};
+        return (Token){.tag = TOKEN_SORT_BY, .data.sort_by = sort_by};
     }
     // Operator
     end = tokenizer->current;
     OpTag op = str_to_optag(&end);
     if (end != NULL) {
         tokenizer->current = end;
-        return (Token){.type = TOKEN_OP, .data.op = op};
+        return (Token){.tag = TOKEN_OP, .data.op = op};
     }
     // Integer
     end = tokenizer->current;
     uint32_t int_val = str_to_int(&end);
     if (end != NULL) {
         tokenizer->current = end;
-        return (Token){.type = TOKEN_INT, .data.ui = int_val};
+        return (Token){.tag = TOKEN_INT, .data.ui = int_val};
     }
     // Float
     end = tokenizer->current;
     float float_val = str_to_float(&end);
     if (end != NULL) {
         tokenizer->current = end;
-        return (Token){.type = TOKEN_FLOAT, .data.f = float_val};
+        return (Token){.tag = TOKEN_FLOAT, .data.f = float_val};
     }
 
     // Nothing matched, return unknown token
-    Token token = {.type = TOKEN_UNK, .data.unk = tokenizer->current};
+    Token token = {.tag = TOKEN_UNK, .data.unk = tokenizer->current};
     // The remaining input was consumed as an unknown token,
     // so we set current to NULL to make future calls return EOF.
     tokenizer->current = NULL;

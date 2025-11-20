@@ -2,6 +2,7 @@
 
 #include "db-io.c"
 #include "t-tree.c"
+#include "tokenizer.c"
 
 int main(void) {
     db_from_file_missing_table_name();
@@ -22,6 +23,12 @@ int main(void) {
     ttree_iter_empty();
     ttree_bulk_insert();
     ttree_bulk_insert_empty();
+
+    tokenizer_empty();
+    tokenizer_unkown();
+    tokenizer_int_and_float();
+    tokenizer_string();
+    tokenizer_mixed();
 
     print_test_summary();
     return 0;
