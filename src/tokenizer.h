@@ -79,6 +79,8 @@ typedef struct {
 } Token;
 
 typedef struct {
+    // The last token that was read. Used for peeking.
+    Token last_token;
     // Pointer to the current character in the input string.
     // NULL if all characters have been consumed.
     char* current;
@@ -280,16 +282,9 @@ float str_to_float(char** str) {
     return val;
 }
 
-// Creates a Tokenizer for the given input string.
-Tokenizer Tokenizer_create(char* input) {
-    return (Tokenizer){
-        .current = input,
-        .take_filename_and_end = false,
-    };
-}
-
-// Reads the next token from the tokenizer.
-Token Tokenizer_next(Tokenizer* tokenizer) {
+// This function is not meant to be called directly.
+// See `Tokenizer_next`.
+static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     if (tokenizer->current == NULL) {
         return (Token){.type = TOKEN_EOF};
     }
@@ -373,5 +368,25 @@ Token Tokenizer_next(Tokenizer* tokenizer) {
     // The remaining input was consumed as an unknown token,
     // so we set current to NULL to make future calls return EOF.
     tokenizer->current = NULL;
+    return token;
+}
+
+// Creates a Tokenizer for the given input string.
+Tokenizer Tokenizer_create(char* input) {
+    Tokenizer tokenizer = (Tokenizer){
+        .current = input,
+        .take_filename_and_end = false,
+    };
+    tokenizer.last_token = __Tokenizer_next_inner(&tokenizer);
+    return tokenizer;
+}
+
+// Reads the next token without advancing the tokenizer.
+Token Tokenizer_peek(Tokenizer* tokenizer) { return tokenizer->last_token; }
+
+// Reads the next token and advances the tokenizer.
+Token Tokenizer_next(Tokenizer* tokenizer) {
+    Token token = tokenizer->last_token;
+    tokenizer->last_token = __Tokenizer_next_inner(tokenizer);
     return token;
 }
