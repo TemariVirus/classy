@@ -6,19 +6,51 @@
 #include <windows.h>
 #endif
 
+#include "db.h"
+#include "error.h"
+
 #define LINE_BUF_SIZE 4096
 #define USER_NAME "P1_1"
 #define SYSTEM_NAME "CMS"
 
 void print_startup_message(void) {
     // Message to guide new user
-    fprintf(stdout, "Welcome to Classy, a class management system!\n");
-    fprintf(stdout, "Type a single line command here, and press <Enter> to run it.\n");
-    fprintf(stdout, "Exit Classy by pressing ctrl+c.\n");
-    fprintf(stdout, "For help on command syntax, run the \"HELP\" command.\n");
+    fprintf(stdout, "Welcome to Classy, a class management system!\n"
+                    "Type a single line command here, and press enter to run it.\n"
+                    "Exit Classy by pressing ctrl+c.\n"
+                    "For help on command syntax, run the \"HELP\" command.\n");
 }
 
-void print_help(void) {
+void print_prompt(const char* prompt_name) { fprintf(stdout, "%s: ", prompt_name); }
+
+// Reads a line from stdin into buf of size 'size'.
+// Returns buf on success, NULL if the line is too long.
+char* get_line(char* buf, size_t size) {
+    if (fgets(buf, size, stdin) == NULL) {
+        // EOF or error
+        return NULL;
+    }
+
+    // Ensure the whole line fits in the buffer
+    size_t newline_offset = strcspn(buf, "\n");
+    if (buf[newline_offset] == '\n') {
+        // Remove newline character
+        buf[newline_offset] = '\0';
+        return buf;
+    }
+
+    // Line too long
+    if (newline_offset >= size - 1) {
+        fprintf(stdout, "Input line too long. Maximum length is %zu characters.\n", size - 2);
+        // Clear the rest of the line from stdin
+        for (int c = fgetc(stdin); c != '\n' && c != EOF; c = fgetc(stdin)) {
+        }
+    }
+    return NULL;
+}
+
+// Runs the help command.
+void run_help(void) {
     fprintf(stdout,
             "Commands are single-line and cannot exceed %d characters in length. All commands are "
             "case-sensitive.\n",
@@ -130,33 +162,42 @@ void print_help(void) {
         "\n");
 }
 
-void print_prompt(const char* prompt_name) { fprintf(stdout, "%s: ", prompt_name); }
-
-// Reads a line from stdin into buf of size 'size'.
-// Returns buf on success, NULL if the line is too long.
-char* get_line(char* buf, size_t size) {
-    if (fgets(buf, size, stdin) == NULL) {
-        // EOF or error
-        return NULL;
+// Runs the open command. `db` is only overwritten if the operation is successful.
+// Returns whether the operation was successful.
+bool run_open(char* filename, DB* db) {
+    FILE* file = fopen(filename, "rb");
+    if (file == NULL) {
+        fprintf(stdout, "Error: Could not open file '%s'.\n", filename);
+        return false;
     }
 
-    // Ensure the whole line fits in the buffer
-    size_t newline_offset = strcspn(buf, "\n");
-    if (buf[newline_offset] == '\n') {
-        // Remove newline character
-        buf[newline_offset] = '\0';
-        return buf;
+    DB temp_db;
+    DB_from_file__Error err = DB_from_file(file, &temp_db);
+    fclose(file);
+    switch (err) {
+    case ERROR_OK: {
+        *db = temp_db;
+        fprintf(stdout, "The database file '%s' was successfully opened.\n", filename);
+        return true;
     }
-
-    // Line too long
-    if (newline_offset >= size - 1) {
-        fprintf(stdout, "Input line too long. Maximum length is %zu characters.\n", size - 2);
-        // Clear the rest of the line from stdin
-        for (int c = fgetc(stdin); c != '\n' && c != EOF;) {
-            c = fgetc(stdin);
-        }
+    case ERROR_MISSING_TABLE_NAME: {
+        fprintf(stdout, "Error: Missing table name in file '%s'.\n", filename);
+        return false;
     }
-    return NULL;
+    case ERROR_BAD_DB_FORMAT: {
+        fprintf(stdout, "Error: Unrecognised file format in file '%s'.\n", filename);
+        return false;
+    }
+    case ERROR_BAD_DB_COLUMN: {
+        fprintf(stdout, "Error: Unknown, missing or duplicate column in file '%s'.\n", filename);
+        return false;
+    }
+    case ERROR_UNORDERED_ID: {
+        fprintf(stdout, "Error: IDs in file '%s' are not in strictly increasing order.\n",
+                filename);
+        return false;
+    }
+    }
 }
 
 int main(void) {
@@ -166,6 +207,8 @@ int main(void) {
 #endif
     print_startup_message();
 
+    DB db;
+    char* db_filename = NULL;
     char line_buf[LINE_BUF_SIZE];
     while (!feof(stdin)) {
         print_prompt(USER_NAME);
@@ -175,8 +218,14 @@ int main(void) {
         }
 
         print_prompt(SYSTEM_NAME);
-        print_help();
-        fprintf(stdout, "input len: %zu \n", strlen(line));
+        if (run_open(line, &db)) {
+            free(db_filename);
+            db_filename = strdup(line);
+            if (db_filename == NULL) {
+                fprintf(stdout, "Critical: Out of memory.\n");
+                return 1;
+            }
+        }
     }
 
     fprintf(stdout, "\n");
