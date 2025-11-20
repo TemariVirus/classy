@@ -205,7 +205,7 @@ TEST tokenizer_string_bad_escape(void) {
     }
 
     {
-        char line[] = R"(SHOW ALL"ac\" \ dea")";
+        char line[] = R"(SHOW ALL "ac\" \ dea")";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT_INT_EQUAL(TOKEN_CMD, Tokenizer_next(&tokenizer).tag);
         EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
@@ -219,7 +219,7 @@ TEST tokenizer_open_cmd(void) {
     START_TEST("tokenizer open cmd");
 
     {
-        char line[] = R"(OPEN abcd efg)";
+        char line[] = R"(OPEN "abcd" QUERY ID=2)";
         Tokenizer tokenizer = Tokenizer_create(line);
 
         Token token = Tokenizer_next(&tokenizer);
@@ -227,7 +227,7 @@ TEST tokenizer_open_cmd(void) {
         EXPECT_INT_EQUAL(CMD_OPEN, token.data.cmd);
         token = Tokenizer_next(&tokenizer);
         EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
-        EXPECT_STRING_EQUAL(R"(abcd efg)", token.data.s);
+        EXPECT_STRING_EQUAL(R"("abcd" QUERY ID=2)", token.data.s);
 
         EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
     }
@@ -246,6 +246,19 @@ TEST tokenizer_open_cmd(void) {
         EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
     }
 
+    {
+        char line[] = R"(OPEN    surrounded by 3 spaces.txt   )";
+        Tokenizer tokenizer = Tokenizer_create(line);
+
+        Token token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_CMD, token.tag);
+        EXPECT_INT_EQUAL(CMD_OPEN, token.data.cmd);
+        token = Tokenizer_next(&tokenizer);
+        EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
+        EXPECT_STRING_EQUAL(R"(   surrounded by 3 spaces.txt   )", token.data.s);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
     END_TEST();
 }
 
@@ -260,7 +273,7 @@ TEST tokenizer_missing_spaces(void) {
     }
 
     {
-        char line[] = "SHOW ALL\"abc\"INName";
+        char line[] = "SHOW ALL \"abc\"INName";
         Tokenizer tokenizer = Tokenizer_create(line);
         // SHOW ALL
         Token token = Tokenizer_next(&tokenizer);
@@ -271,6 +284,14 @@ TEST tokenizer_missing_spaces(void) {
         EXPECT_INT_EQUAL(TOKEN_STRING, token.tag);
         EXPECT_STRING_EQUAL("abc", token.data.s);
         // INName
+        EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
+        EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
+    }
+
+    {
+        char line[] = "QUERY(ID=1)";
+        Tokenizer tokenizer = Tokenizer_create(line);
+        // QUERY(ID=1)
         EXPECT_INT_EQUAL(TOKEN_UNK, Tokenizer_next(&tokenizer).tag);
         EXPECT_INT_EQUAL(TOKEN_EOF, Tokenizer_next(&tokenizer).tag);
     }

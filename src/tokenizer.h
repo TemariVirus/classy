@@ -10,6 +10,7 @@
 #include "string_helper.h"
 
 typedef enum {
+    CMD_HELP,
     CMD_OPEN,
     CMD_SHOW_ALL,
     CMD_SHOW_SUMMARY,
@@ -38,16 +39,16 @@ typedef struct {
 } SortBy;
 
 typedef enum {
-    // Sorted in order of highest precedence to lowest precedence
-    OP_LPAREN = 1,
-    OP_RPAREN,
-    OP_EQ,
-    OP_GT,
-    OP_LT,
-    OP_IN,
-    OP_NOT,
+    // Sorted in order of lowest to highest binding power
+    OP_OR = 1,
     OP_AND,
-    OP_OR,
+    OP_NOT,
+    OP_IN,
+    OP_LT,
+    OP_GT,
+    OP_EQ,
+    OP_RPAREN,
+    OP_LPAREN,
 } OpTag;
 
 typedef enum {
@@ -74,8 +75,9 @@ typedef union {
 } TokenData;
 
 typedef struct {
-    TokenTag tag;
+    // The active field depends on the tag.
     TokenData data;
+    TokenTag tag;
 } Token;
 
 typedef struct {
@@ -90,7 +92,7 @@ typedef struct {
 
 // If `*str` starts with `prefix`, advances `*str` past the prefix and returns
 // true. Otherwise, `*str` is unchanged and returns false.
-bool __str_skip(char** str, const char* prefix) {
+static bool __str_skip(char** str, const char* prefix) {
     size_t prefix_len = strlen(prefix);
     if (strncmp(*str, prefix, prefix_len) == 0) {
         *str += prefix_len;
@@ -104,7 +106,9 @@ bool __str_skip(char** str, const char* prefix) {
 // If no command name is found, `str` is set to NULL.
 CommandTag str_to_commandtag(char** str) {
     CommandTag cmd;
-    if (__str_skip(str, "OPEN")) {
+    if (__str_skip(str, "HELP")) {
+        cmd = CMD_HELP;
+    } else if (__str_skip(str, "OPEN")) {
         cmd = CMD_OPEN;
     } else if (__str_skip(str, "SHOW ALL")) {
         cmd = CMD_SHOW_ALL;
@@ -123,7 +127,9 @@ CommandTag str_to_commandtag(char** str) {
     } else {
         goto fail;
     }
-    if (!isalpha(*str[0])) {
+
+    // Command must be followed by whitespace or end of string
+    if (isspace(*str[0]) || *str[0] == '\0') {
         return cmd;
     }
 
@@ -259,7 +265,7 @@ uint32_t str_to_int(char** str) {
         return 0;
     }
     // If one of these characters follows, it's a float
-    if (strchr(".eE", end[0])) {
+    if (end[0] != '\0' && strchr(".eE", end[0]) != NULL) {
         *str = NULL;
         return 0;
     }
@@ -288,6 +294,19 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     if (tokenizer->current == NULL) {
         return (Token){.tag = TOKEN_EOF};
     }
+
+    // Filenames are not escaped or quoted
+    if (tokenizer->take_filename_and_end) {
+        // Filename cannot be empty
+        if (tokenizer->current[0] == '\0') {
+            tokenizer->current = NULL;
+            return (Token){.tag = TOKEN_EOF};
+        }
+
+        Token token = (Token){.tag = TOKEN_STRING, .data.s = tokenizer->current};
+        tokenizer->current = NULL;
+        return token;
+    }
     // Ignore whitespace between tokens
     while (isspace(tokenizer->current[0])) {
         tokenizer->current++;
@@ -296,13 +315,6 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
     if (tokenizer->current[0] == '\0') {
         tokenizer->current = NULL;
         return (Token){.tag = TOKEN_EOF};
-    }
-    // Filenames are not escaped or quoted
-    if (tokenizer->take_filename_and_end) {
-        Token token =
-            (Token){.tag = TOKEN_STRING, .data.s = tokenizer->current};
-        tokenizer->current = NULL;
-        return token;
     }
     // Regular string
     if (tokenizer->current[0] == '"') {
@@ -325,6 +337,10 @@ static Token __Tokenizer_next_inner(Tokenizer* tokenizer) {
         tokenizer->current = end;
         if (cmd == CMD_OPEN || cmd == CMD_SAVE) {
             tokenizer->take_filename_and_end = true;
+            if (isspace(tokenizer->current[0])) {
+                // Skip whitespace after command
+                tokenizer->current++;
+            }
         }
         return (Token){.tag = TOKEN_CMD, .data.cmd = cmd};
     }
