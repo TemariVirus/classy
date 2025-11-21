@@ -56,10 +56,14 @@ Double quotes (`"`) and backslashes (`\`) within string values must be escaped b
 ### QUERY
 
 ```plain
-QUERY condition
+QUERY condition [SORT BY column [ASC|DESC]]
 ```
 
 Displays all rows in the active database that satisfy `condition`.
+
+If the sort column is not specified, it defaults to `ID`.
+
+If the sort order is not specified, it defaults to `ASC`.
 
 `condition` may be composed of the following operations (ordered by highest to lowest precedence):
 
@@ -76,7 +80,7 @@ Parentheses may be used to group sub-conditions. If necessary, integers will be 
 Examples:
 
 ```plain
-QUERY ID=12345
+QUERY ID=12345 SORT BY Mark DESC
 QUERY (Mark > 50.6 OR NOT Programme = "Computer Science") AND "Alice \"in\" Wonderland" IN Name
 ```
 
