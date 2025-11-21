@@ -1,6 +1,7 @@
 #include "testing.h"
 
 #include "db-io.c"
+#include "parser.c"
 #include "t-tree.c"
 #include "tokenizer.c"
 
@@ -11,6 +12,17 @@ int main(void) {
     db_from_file_missing_line_term();
     db_from_file_successful();
     db_from_file_empty();
+
+    parser_help();
+    parser_open();
+    parser_show_all();
+    parser_insert();
+    parser_query();
+    parser_show_summary();
+    parser_update();
+    parser_delete();
+    parser_save();
+    parser_unknown();
 
     ttree_get();
     ttree_get_empty();
