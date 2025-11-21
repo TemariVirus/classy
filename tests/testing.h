@@ -44,12 +44,14 @@ void print_test_header(const char* file, int line, const char* test_name) {
 
 #define END_TEST()                                                                                 \
     do {                                                                                           \
+        (void)test_name;                                                                           \
         tests_passed++;                                                                            \
         return;                                                                                    \
     } while (0)
 
 #define SKIP_TEST()                                                                                \
     do {                                                                                           \
+        (void)test_name;                                                                           \
         tests_skipped++;                                                                           \
         return;                                                                                    \
     } while (0)
