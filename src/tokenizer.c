@@ -8,7 +8,6 @@
 
 #include "row.c"
 #include "string_helper.c"
-#include "unreachable.c"
 
 typedef enum {
     CMD_HELP,

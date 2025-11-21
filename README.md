@@ -129,4 +129,4 @@ Saves the active database to a file.
 
 If `filename` already exists, it will be overwritten.
 
-If `filename` is not specified, it defaults to the filename used in the last `OPEN` or `SAVE` command.
+If `filename` is not specified, it defaults to the filename used in the last successful `OPEN` or `SAVE` command.

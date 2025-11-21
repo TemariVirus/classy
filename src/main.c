@@ -1,5 +1,6 @@
 #define __STDC_WANT_LIB_EXT2__ 1
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +12,7 @@
 #include "db.c"
 #include "error.c"
 #include "parser.c"
+#include "quicksort.c"
 #include "row.c"
 #include "tokenizer.c"
 
@@ -72,6 +74,19 @@ bool warn_no_db(const DB* db) {
         return true;
     }
     return false;
+}
+
+// Pretty prints the columns to stdout. This is meant to be used in tandem with `print_record`.
+void print_columns(void) {
+    fprintf(stdout, "%-10s %-25s %-35s %-6s\n", Column_name(COLUMN_ID), Column_name(COLUMN_NAME),
+            Column_name(COLUMN_PROGRAMME), Column_name(COLUMN_MARK));
+}
+
+// Pretty prints the record to stdout. This is meant to be used in tandem with `print_columns`.
+// The `temp_id` member of the record must be set to its respective ID.
+void print_record(const Row* record) {
+    fprintf(stdout, "%-10u %-25s %-35s %-6.1f\n", record->temp_id, record->name, record->programme,
+            record->mark);
 }
 
 // Runs the HELP command.
@@ -227,6 +242,51 @@ bool run_open(DB* db, const CmdOpenArgs* args) {
     }
 }
 
+// Runs the SHOW ALL command.
+void run_show_all(const DB* db, const CmdShowAllArgs* args) {
+    if (db->row_count == 0) {
+        fprintf(stdout, "There are no records in the table \"%s\".\n", db->table_name);
+        return;
+    }
+
+    ID id;
+    Row* record;
+    TTreeIter it = TTree_iter_start(&db->data);
+    // Iterator already iterates in ascending order of ID, no need to sort in that case
+    if (args->sort_by.column == COLUMN_ID && args->sort_by.ascending) {
+        fprintf(stdout, "Here are all the records in the table \"%s\".\n", db->table_name);
+        print_columns();
+        while (TTree_iter_next(&it, &id, &record)) {
+            record->temp_id = id; // Used for printing
+            print_record(record);
+        }
+        return;
+    }
+
+    // Copy records to flat array so they can be sorted
+    Row** records = malloc(sizeof(Row*) * db->row_count);
+    if (records == NULL) {
+        fprintf(stdout, "Error: Out of memory.\n");
+        return;
+    }
+    for (size_t i = 0; TTree_iter_next(&it, &id, &record); i++) {
+        records[i] = record;
+        records[i]->temp_id = id; // Used for sorting and printing
+    }
+
+    // Sort records
+    quicksort(records, db->row_count, sizeof(Row*), cmp_row, &args->sort_by);
+
+    // Print records
+    fprintf(stdout, "Here are all the records in the table \"%s\".\n", db->table_name);
+    print_columns();
+    for (size_t i = 0; i < db->row_count; i++) {
+        print_record(records[i]);
+    }
+
+    free(records);
+}
+
 // Runs the SHOW SUMMARY command.
 void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     uint64_t record_count = 0;
@@ -236,6 +296,7 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     float lowest_mark;
     RecordList lowest_mark_records = RecordList_create();
 
+    // Generate summary
     ID id;
     Row* row;
     TTreeIter it = TTree_iter_start(&db->data);
@@ -276,6 +337,7 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
         goto cleanup;
     }
 
+    // Print summary
     double avg_mark = mark_sum / (double)record_count;
     fprintf(stdout, "Here is a summary of the table \"%s\".\n", db->table_name);
     fprintf(stdout, "Number of students matched: %llu\n", record_count);
@@ -328,6 +390,7 @@ void run_update(const DB* db, const CmdUpdateArgs* args) {
         return;
     }
 
+    // Find which columns should be updated and update them
     for (Column column = 0; column < COLUMN_COUNT; column++) {
         if (!ColumnsMask_get(&args->update_columns, column)) {
             continue;
@@ -359,20 +422,23 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
         fprintf(stdout, "The record with ID=%u does not exist.\n", args->id);
         return;
     }
+
+    // There is a record to delete, but ask the user for confirmation
     fprintf(stdout,
             "Are you sure you want to delete the record with ID=%u? Type \"Y\" to confirm or "
             "type \"N\" to cancel.\n",
             args->id);
-
     print_prompt(USER_NAME);
     char confirmation_buf[3];
     char* confirmation = get_line(confirmation_buf, sizeof(confirmation_buf));
 
     print_prompt(SYSTEM_NAME);
     if (confirmation == NULL || strcmp(confirmation, "Y") != 0) {
+        // User did not type Y
         fprintf(stdout, "The deletion is cancelled.\n");
         return;
     }
+    // User typed Y
     TTree_remove(&db->data, args->id);
     fprintf(stdout, "The record with ID=%u was successfully deleted.\n", args->id);
     db->row_count--;
@@ -414,6 +480,11 @@ int main(void) {
                 last_filename = strdup(cmd.args.open.filename);
             }
             break;
+        case CMD_SHOW_ALL:
+            if (!warn_no_db(&db)) {
+                run_show_all(&db, &cmd.args.show_all);
+            }
+            break;
         case CMD_SHOW_SUMMARY:
             if (!warn_no_db(&db)) {
                 run_show_summary(&db, &cmd.args.show_summary);
@@ -423,6 +494,9 @@ int main(void) {
             if (!warn_no_db(&db)) {
                 run_insert(&db, &cmd.args.insert);
             }
+            break;
+        case CMD_QUERY:
+            fprintf(stdout, "TODO\n");
             break;
         case CMD_UPDATE:
             if (!warn_no_db(&db)) {
@@ -434,7 +508,7 @@ int main(void) {
                 run_delete(&db, &cmd.args.delete);
             }
             break;
-        default:
+        case CMD_SAVE:
             fprintf(stdout, "TODO\n");
             break;
         }

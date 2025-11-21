@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "string_helper.c"
+#include "unreachable.c"
 
 typedef enum {
     VALUE_INT,
@@ -131,6 +132,48 @@ char* read_escaped_string(char** str_ptr) {
     }
     // Quote not closed
     return NULL;
+}
+
+// Returns the value of the specified column of the given row.
+// The data type of `column` must be VALUE_INT.
+// The `temp_id` member must be set to the row's ID.
+uint32_t Row_get_int(const Row* row, Column column) {
+    (void)row;
+    switch (column) {
+    case COLUMN_ID:
+        return row->temp_id;
+    case COLUMN_NAME:
+    case COLUMN_PROGRAMME:
+    case COLUMN_MARK:
+        UNREACHABLE;
+    }
+}
+
+// Returns the value of the specified column of the given row.
+// The data type of `column` must be VALUE_FLOAT.
+float Row_get_float(const Row* row, Column column) {
+    switch (column) {
+    case COLUMN_MARK:
+        return row->mark;
+    case COLUMN_ID:
+    case COLUMN_NAME:
+    case COLUMN_PROGRAMME:
+        UNREACHABLE;
+    }
+}
+
+// Returns the value of the specified column of the given row.
+// The data type of `column` must be VALUE_STRING.
+char* Row_get_string(const Row* row, Column column) {
+    switch (column) {
+    case COLUMN_NAME:
+        return row->name;
+    case COLUMN_PROGRAMME:
+        return row->programme;
+    case COLUMN_ID:
+    case COLUMN_MARK:
+        UNREACHABLE;
+    }
 }
 
 // Duplicate a row and its pointers.
