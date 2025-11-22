@@ -31,7 +31,7 @@ TEST db_from_file_bad_format(void) {
                      "\r\n";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
-    EXPECT_INT_EQUAL(ERROR_BAD_FORMAT, DB_from_file(fptr, &db));
+    EXPECT_INT_EQUAL(ERROR_BAD_DB_FORMAT, DB_from_file(fptr, &db));
 
     DB_destroy(&db);
     fclose(fptr);
@@ -66,7 +66,7 @@ TEST db_from_file_missing_line_term(void) {
                      R"(1234,64.4,"name","programme")";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
-    EXPECT_INT_EQUAL(ERROR_BAD_FORMAT, DB_from_file(fptr, &db));
+    EXPECT_INT_EQUAL(ERROR_BAD_DB_FORMAT, DB_from_file(fptr, &db));
 
     DB_destroy(&db);
     fclose(fptr);

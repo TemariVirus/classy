@@ -57,8 +57,8 @@ static bool __parse_columns(char* line, Column columns[COLUMN_COUNT]) {
 typedef enum {
     DB_from_file__ok = ERROR_OK,
     DB_from_file__missing_table_name = ERROR_MISSING_TABLE_NAME,
-    DB_from_file__bad_format = ERROR_BAD_FORMAT,
-    DB_from_file__bad_column = ERROR_BAD_COLUMN,
+    DB_from_file__bad_format = ERROR_BAD_DB_FORMAT,
+    DB_from_file__bad_column = ERROR_BAD_DB_COLUMN,
     DB_from_file__unordered_id = ERROR_UNORDERED_ID,
 } DB_from_file__Error;
 

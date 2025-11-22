@@ -18,6 +18,6 @@ typedef int ClassyError;
 // We'll start ours at 1001 to avoid clashes.
 #define ERROR_CANNOT_ACCESS_FILE 1001
 #define ERROR_MISSING_TABLE_NAME 1002
-#define ERROR_BAD_FORMAT 1003
-#define ERROR_BAD_COLUMN 1004
+#define ERROR_BAD_DB_FORMAT 1003
+#define ERROR_BAD_DB_COLUMN 1004
 #define ERROR_UNORDERED_ID 1005
