@@ -340,7 +340,7 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     // Print summary
     double avg_mark = mark_sum / (double)record_count;
     fprintf(stdout, "Here is a summary of the table \"%s\".\n", db->table_name);
-    fprintf(stdout, "Number of students matched: %llu\n", record_count);
+    fprintf(stdout, "Number of students matched: %lu\n", record_count);
     fprintf(stdout, "Average mark:               %.1f\n", avg_mark);
 
     fprintf(stdout, "Highest mark:               %.1f by ", highest_mark);
@@ -377,6 +377,42 @@ void run_insert(DB* db, const CmdInsertArgs* args) {
                 "Run the UPDATE command to update an existing record instead.\n",
                 args->id);
     }
+}
+
+// Runs the QUERY command.
+void run_query(const DB* db, const CmdQueryArgs* args) {
+    ID id;
+    Row* record;
+    TTreeIter it = TTree_iter_start(&db->data);
+
+    // Copy records to flat array so they can be sorted
+    RecordList records = RecordList_create();
+    while (TTree_iter_next(&it, &id, &record)) {
+        if (!Condition_eval(args->filter, id, record)) {
+            continue;
+        }
+        record->temp_id = id; // Used for sorting and printing
+        RecordList_append(&records, record);
+    }
+
+    if (records.length == 0) {
+        // No records to print
+        fprintf(stdout, "There are no matching records in the table \"%s\".\n", db->table_name);
+    } else {
+        // Iterator already iterates in ascending order of ID, no need to sort in that case
+        if (args->sort_by.column != COLUMN_ID || !args->sort_by.ascending) {
+            quicksort(records.items, records.length, sizeof(Row*), cmp_row, &args->sort_by);
+        }
+
+        // Print records
+        fprintf(stdout, "Here are all the matching records in the table \"%s\".\n", db->table_name);
+        print_columns();
+        for (size_t i = 0; i < records.length; i++) {
+            print_record(RecordList_get(&records, i));
+        }
+    }
+
+    RecordList_destroy(&records);
 }
 
 // Run the UPDATE command.
@@ -496,7 +532,9 @@ int main(void) {
             }
             break;
         case CMD_QUERY:
-            fprintf(stdout, "TODO\n");
+            if (!warn_no_db(&db)) {
+                run_query(&db, &cmd.args.query);
+            }
             break;
         case CMD_UPDATE:
             if (!warn_no_db(&db)) {
