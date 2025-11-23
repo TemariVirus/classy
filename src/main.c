@@ -8,6 +8,8 @@
 
 #include "db.c"
 #include "error.c"
+#include "parser.c"
+#include "tokenizer.c"
 
 #define LINE_BUF_SIZE 4096
 #define USER_NAME "P1_1"
@@ -18,12 +20,12 @@ void print_startup_message(void) {
     fprintf(stdout, "Welcome to Classy, a class management system!\n"
                     "Type a single line command here, and press enter to run it.\n"
                     "Exit Classy by pressing ctrl+c.\n"
-                    "For help on command syntax, run the \"HELP\" command.\n");
+                    "For help on command syntax, run the HELP command.\n");
 }
 
 void print_prompt(const char* prompt_name) { fprintf(stdout, "%s: ", prompt_name); }
 
-// Reads a line from stdin into buf of size 'size'.
+// Reads a line from stdin into buf of size `size`.
 // Returns buf on success, NULL if the line is too long.
 char* get_line(char* buf, size_t size) {
     if (fgets(buf, size, stdin) == NULL) {
@@ -164,10 +166,10 @@ void run_help(void) {
 
 // Runs the open command. `db` is only overwritten if the operation is successful.
 // Returns whether the operation was successful.
-bool run_open(char* filename, DB* db) {
+bool run_open(const char* filename, DB* db) {
     FILE* file = fopen(filename, "rb");
     if (file == NULL) {
-        fprintf(stdout, "Error: Could not open file '%s'.\n", filename);
+        fprintf(stdout, "Error: Could not open file \"%s\".\n", filename);
         return false;
     }
 
@@ -176,24 +178,25 @@ bool run_open(char* filename, DB* db) {
     fclose(file);
     switch (err) {
     case ERROR_OK: {
+        DB_destroy(db);
         *db = temp_db;
-        fprintf(stdout, "The database file '%s' was successfully opened.\n", filename);
+        fprintf(stdout, "The database file \"%s\" was successfully opened.\n", filename);
         return true;
     }
     case ERROR_MISSING_TABLE_NAME: {
-        fprintf(stdout, "Error: Missing table name in file '%s'.\n", filename);
+        fprintf(stdout, "Error: Missing table name in file \"%s\".\n", filename);
         return false;
     }
     case ERROR_BAD_DB_FORMAT: {
-        fprintf(stdout, "Error: Unrecognised file format in file '%s'.\n", filename);
+        fprintf(stdout, "Error: Unrecognised file format in file \"%s\".\n", filename);
         return false;
     }
     case ERROR_BAD_DB_COLUMN: {
-        fprintf(stdout, "Error: Unknown, missing or duplicate column in file '%s'.\n", filename);
+        fprintf(stdout, "Error: Unknown, missing or duplicate column in file \"%s\".\n", filename);
         return false;
     }
     case ERROR_UNORDERED_ID: {
-        fprintf(stdout, "Error: IDs in file '%s' are not in strictly increasing order.\n",
+        fprintf(stdout, "Error: IDs in file \"%s\" are not in strictly increasing order.\n",
                 filename);
         return false;
     }
@@ -207,8 +210,14 @@ int main(void) {
 #endif
     print_startup_message();
 
-    DB db;
-    char* db_filename = NULL;
+    // db is initialised only if last_filename is not NULL
+    DB db = (DB){
+        .data = TTree_create(),
+        .row_count = 0,
+        .table_name = NULL,
+    };
+    char* last_filename = NULL;
+
     char line_buf[LINE_BUF_SIZE];
     while (!feof(stdin)) {
         print_prompt(USER_NAME);
@@ -216,16 +225,31 @@ int main(void) {
         if (line == NULL) {
             continue;
         }
-
         print_prompt(SYSTEM_NAME);
-        if (run_open(line, &db)) {
-            free(db_filename);
-            db_filename = strdup(line);
-            if (db_filename == NULL) {
-                fprintf(stdout, "Critical: Out of memory.\n");
-                return 1;
-            }
+
+        Command cmd;
+        Tokenizer tokenizer = Tokenizer_create(line);
+        if (!parse_command(&tokenizer, &cmd)) {
+            fprintf(stdout, "Invalid command. For help on command syntax, run the HELP command.\n");
+            continue;
         }
+
+        switch (cmd.tag) {
+        case CMD_HELP:
+            run_help();
+            break;
+        case CMD_OPEN:
+            if (run_open(cmd.args.open.filename, &db)) {
+                free(last_filename);
+                last_filename = strdup(cmd.args.open.filename);
+            }
+            break;
+        default:
+            fprintf(stdout, "TODO\n");
+            break;
+        }
+
+        Command_destroy(&cmd);
     }
 
     fprintf(stdout, "\n");
