@@ -7,11 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "error.h"
-#include "row.h"
-#include "string_helper.h"
-#include "t-tree.h"
-#include "tokenizer.h"
+#include "error.c"
+#include "row.c"
+#include "string_helper.c"
+#include "t-tree.c"
+#include "tokenizer.c"
 
 #define MAX_LINE_LEN 4096
 #define LINE_TERM "\r\n"

@@ -6,8 +6,8 @@
 #include <windows.h>
 #endif
 
-#include "db.h"
-#include "error.h"
+#include "db.c"
+#include "error.c"
 
 #define LINE_BUF_SIZE 4096
 #define USER_NAME "P1_1"

@@ -4,8 +4,8 @@
 #include <math.h>
 #include <string.h>
 
-#include "../src/tokenizer.h"
-#include "testing.h"
+#include "../src/tokenizer.c"
+#include "testing.c"
 
 TEST tokenizer_empty(void) {
     START_TEST("Tokenizer empty");

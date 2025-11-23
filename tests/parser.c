@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "../src/parser.c"
-#include "../src/tokenizer.h"
-#include "testing.h"
+#include "../src/tokenizer.c"
+#include "testing.c"
 
 TEST parser_help(void) {
     START_TEST("Parser HELP");

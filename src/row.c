@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "string_helper.h"
+#include "string_helper.c"
 
 typedef uint32_t ID;
 typedef struct {

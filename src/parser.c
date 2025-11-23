@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "tokenizer.h"
+#include "tokenizer.c"
 #include "unreachable.c"
 
 struct Condition;

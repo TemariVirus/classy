@@ -3,9 +3,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#include "../src/chunked-allocator.h"
-#include "../src/t-tree.h"
-#include "testing.h"
+#include "../src/chunked-allocator.c"
+#include "../src/t-tree.c"
+#include "testing.c"
 
 #define EXPECT_NODE_INVARIANTS(it)                                                                 \
     do {                                                                                           \

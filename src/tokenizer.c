@@ -6,8 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "row.h"
-#include "string_helper.h"
+#include "row.c"
+#include "string_helper.c"
 
 typedef enum {
     CMD_HELP,

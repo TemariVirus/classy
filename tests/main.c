@@ -1,4 +1,4 @@
-#include "testing.h"
+#include "testing.c"
 
 #include "db-io.c"
 #include "parser.c"

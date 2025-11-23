@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "row.h"
+#include "row.c"
 
 #define CACHE_ALIGN 64 // Assume a cache line is 64B
 // Maximum number of IDs in a node.
@@ -71,11 +71,11 @@ typedef enum {
 // chunked-allocator for fast aligned allocation
 #define TYPE TTreeNode
 #define TYPED(THING) TTreeNode##THING
-#include "chunked-allocator.h"
+#include "chunked-allocator.c"
 
 #define TYPE TTreeNode*
 #define TYPED(THING) TTreeNode##THING
-#include "list.h"
+#include "list.c"
 
 // The TTree owns the memory (and strings) of the all nodes.
 typedef struct {

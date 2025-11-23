@@ -3,9 +3,9 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "../src/db.h"
-#include "../src/fmemopen.h"
-#include "testing.h"
+#include "../src/db.c"
+#include "../src/fmemopen.c"
+#include "testing.c"
 
 TEST db_from_file_missing_table_name(void) {
     START_TEST("DB from file missing table name");
