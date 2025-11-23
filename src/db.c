@@ -12,6 +12,7 @@
 #include "string_helper.c"
 #include "t-tree.c"
 #include "tokenizer.c"
+#include "unreachable.c"
 
 #define MAX_LINE_LEN 4096
 #define LINE_TERM "\r\n"
@@ -166,7 +167,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
                 } else if (columns[i] == COLUMN_PROGRAMME) {
                     row.programme = str;
                 } else {
-                    assert(false); // Unreachable
+                    UNREACHABLE;
                 }
                 // Skip comma
                 split.current++;

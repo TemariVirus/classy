@@ -311,7 +311,7 @@ static bool __prefixed_condition(OpTag op, uint8_t rbp, Tokenizer* tokenizer,
         also_free_rhs = false;
         break;
     default:
-        assert(false); // unreachable
+        UNREACHABLE;
     }
 
     // Wrap condition in expression
@@ -385,7 +385,7 @@ static bool __infixed_condition(Expression lhs, OpTag op, uint8_t rbp, Tokenizer
         cond->args.and_or.lhs = lhs.value.cond;
         break;
     default:
-        assert(false); // unreachable
+        UNREACHABLE;
     }
 
     // Wrap condition in expression

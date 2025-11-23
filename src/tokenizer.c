@@ -8,6 +8,7 @@
 
 #include "row.c"
 #include "string_helper.c"
+#include "unreachable.c"
 
 typedef enum {
     CMD_HELP,
@@ -144,7 +145,7 @@ const char* Column_name(Column column) {
     case COLUMN_MARK:
         return "Mark";
     }
-    assert(false); // Unreachable
+    UNREACHABLE;
 }
 
 // Returns the Column represented by the start of the string.
