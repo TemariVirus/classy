@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "condition.c"
+#include "row.c"
 #include "tokenizer.c"
 #include "unreachable.c"
 
@@ -92,12 +93,6 @@ typedef struct {
     } args;
     CommandTag tag;
 } Command;
-
-// The default sort by arguments used when none are specified.
-const SortBy DEFAULT_SORT_BY = {
-    .column = COLUMN_ID,
-    .ascending = true,
-};
 
 static bool __parse_expression(Tokenizer*, uint8_t, Expression*);
 
@@ -499,7 +494,7 @@ error_cleanup:
 //
 // The returned condition must be freed with `Condition_destroy`.
 static Condition* __parse_condition(Tokenizer* tokenizer) {
-    Expression expr = (Expression){0};
+    Expression expr;
     if (!__parse_expression(tokenizer, 0, &expr)) {
         return NULL;
     }
@@ -514,26 +509,25 @@ static Condition* __parse_condition(Tokenizer* tokenizer) {
 // Parses at most `n` column-value pairs of the form `Column=value`
 // from `tokenizer` into `out_id` and `out_row`.
 // It is an error for the same column to appear multiple times.
-// Returns a bitmask of the seen columns, or 0 on error.
+// Returns a bitmask of the seen columns, or COLUMNS_MASK_EMPTY on error.
 static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id, Row* out_row) {
-    ColumnsMask seen_columns = 0;
+    ColumnsMask seen_columns = COLUMNS_MASK_EMPTY;
     for (int i = 0; i < n; i++) {
         Token column_token = Tokenizer_next(tokenizer);
         if (column_token.tag != TOKEN_COLUMN) {
             break;
         }
         Column column = column_token.data.col;
-        ColumnsMask column_bit = 1 << column;
-        if (seen_columns & column_bit) {
+        if (ColumnsMask_get(&seen_columns, column)) {
             // Column specified multiple times
-            return 0;
+            return COLUMNS_MASK_EMPTY;
         }
-        seen_columns |= column_bit;
+        ColumnsMask_set(&seen_columns, column);
 
         // '=' must separate column and value
         Token eq_token = Tokenizer_next(tokenizer);
         if (eq_token.tag != TOKEN_OP || eq_token.data.op != OP_EQ) {
-            return 0;
+            return COLUMNS_MASK_EMPTY;
         }
 
         Token value_token = Tokenizer_next(tokenizer);
@@ -543,12 +537,12 @@ static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id
         case TOKEN_FLOAT:
             break;
         default:
-            return 0;
+            return COLUMNS_MASK_EMPTY;
         }
 
         union EqGtLtValue value;
         if (!__coerce_eq_gt_lt_value(column, __expression_from_token(value_token), &value)) {
-            return 0;
+            return COLUMNS_MASK_EMPTY;
         }
         switch (column) {
         case COLUMN_ID:
@@ -614,7 +608,7 @@ static bool __parse_show_summary(Tokenizer* tokenizer, CmdSummaryArgs* out) {
 // Returns whether parsing was successful.
 static bool __parse_insert(Tokenizer* tokenizer, CmdInsertArgs* out) {
     ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
-    return seen_columns == ALL_COLUMNS_MASK;
+    return seen_columns == COLUMNS_MASK_FULL;
 }
 
 // Parses the arguments for the QUERY command from `tokenizer` into `out`.
@@ -645,13 +639,14 @@ static bool __parse_query(Tokenizer* tokenizer, CmdQueryArgs* out) {
 static bool __parse_update(Tokenizer* tokenizer, CmdUpdateArgs* out) {
     ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
     // ID column is required
-    if ((seen_columns & (1 << COLUMN_ID)) == 0) {
+    if (!ColumnsMask_get(&seen_columns, COLUMN_ID)) {
         return false;
     }
     // Set all seen columns except ID
-    out->update_columns = seen_columns & ~((ColumnsMask)(1 << COLUMN_ID));
+    ColumnsMask_unset(&seen_columns, COLUMN_ID);
+    out->update_columns = seen_columns;
     // At least one column must be updated
-    return out->update_columns != 0;
+    return out->update_columns != COLUMNS_MASK_EMPTY;
 }
 
 // Parses the arguments for the DELETE command from `tokenizer` into `out`.

@@ -7,6 +7,19 @@
 
 #include "string_helper.c"
 
+typedef enum {
+    COLUMN_ID = 0,
+    COLUMN_NAME = 1,
+    COLUMN_PROGRAMME = 2,
+    COLUMN_MARK = 3,
+} Column;
+#define COLUMN_COUNT 4
+
+// The COLUMN_* values indicate the bit position.
+typedef uint8_t ColumnsMask;
+#define COLUMNS_MASK_EMPTY 0
+#define COLUMNS_MASK_FULL (((ColumnsMask)1 << COLUMN_COUNT) - 1)
+
 typedef uint32_t ID;
 typedef struct {
     char* name;
@@ -16,6 +29,17 @@ typedef struct {
     // However, it may be used by some operations to avoid memory allocations.
     uint32_t temp_id;
 } Row;
+
+// Returns whether the bit of the specified column is set.
+bool ColumnsMask_get(const ColumnsMask* mask, Column column) {
+    return (*mask & (1 << column)) != 0;
+}
+
+// Sets the bit of the specified column.
+void ColumnsMask_set(ColumnsMask* mask, Column column) { *mask |= (1 << column); }
+
+// Unsets the bit of the specified column.
+void ColumnsMask_unset(ColumnsMask* mask, Column column) { *mask &= ~(1 << column); }
 
 // Parse an ID from a string. Returns whether parsing was successful.
 bool parse_id(const char* str, ID* out_id) {

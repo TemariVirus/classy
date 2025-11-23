@@ -21,18 +21,6 @@ typedef enum {
     CMD_SAVE,
 } CommandTag;
 
-typedef enum {
-    COLUMN_ID = 0,
-    COLUMN_NAME = 1,
-    COLUMN_PROGRAMME = 2,
-    COLUMN_MARK = 3,
-} Column;
-#define COLUMN_COUNT 4
-
-// The COLUMN_* values indicate the bit position.
-typedef uint8_t ColumnsMask;
-#define ALL_COLUMNS_MASK (((ColumnsMask)1 << COLUMN_COUNT) - 1)
-
 typedef struct {
     Column column;
     bool ascending;
@@ -89,6 +77,12 @@ typedef struct {
     // Whether the tokenizer should consume the filename and end.
     bool take_filename_and_end;
 } Tokenizer;
+
+// The default sort by arguments used when none are specified.
+const SortBy DEFAULT_SORT_BY = {
+    .column = COLUMN_ID,
+    .ascending = true,
+};
 
 // If `*str` starts with `prefix`, advances `*str` past the prefix and returns
 // true. Otherwise, `*str` is unchanged and returns false.
@@ -182,30 +176,26 @@ fail:
 // Updates `str` to point to the character after the SORT BY clause.
 // If no SORT BY clause is found, `str` is set to NULL.
 SortBy str_to_sortby(char** str) {
-    const SortBy empty = {.column = (Column)0, .ascending = false};
+    SortBy sort_by = DEFAULT_SORT_BY;
 
     // SORT BY
     if (!__str_skip(str, "SORT BY ")) {
         *str = NULL;
-        return empty;
+        return sort_by;
     }
     // Column name
-    Column column = str_to_column(str);
+    sort_by.column = str_to_column(str);
     if (*str == NULL) {
-        return empty;
+        return sort_by;
     }
     // Optional ASC/DESC
-    bool ascending = true;
     if (__str_skip(str, " ASC")) {
-        ascending = true;
+        sort_by.ascending = true;
     } else if (__str_skip(str, " DESC")) {
-        ascending = false;
+        sort_by.ascending = false;
     }
 
-    return (SortBy){
-        .column = column,
-        .ascending = ascending,
-    };
+    return sort_by;
 }
 
 // Returns the OpTag represented by the start of the string.

@@ -61,11 +61,11 @@ static bool __parse_columns(char* line, Column columns[COLUMN_COUNT]) {
     }
 
     // Check that all columns were parsed
-    ColumnsMask mask = 0;
+    ColumnsMask mask = COLUMNS_MASK_EMPTY;
     for (int i = 0; i < COLUMN_COUNT; i++) {
-        mask |= 1 << columns[i];
+        ColumnsMask_set(&mask, columns[i]);
     }
-    return mask == ALL_COLUMNS_MASK;
+    return mask == COLUMNS_MASK_FULL;
 }
 
 typedef enum {
