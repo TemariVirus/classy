@@ -221,30 +221,25 @@ bool run_open(const char* filename, DB* db) {
 
 // Runs the SHOW SUMMARY command.
 void run_show_summary(const DB* db, const Condition* filter) {
-    if (db->row_count == 0) {
-        fprintf(stdout, "There are no records in the table \"%s\".\n", db->table_name);
-        return;
-    }
+    uint32_t record_count = 0;
+    double mark_sum = 0.0; // Use double to prevent infinity when adding many finite floats
+    float highest_mark;
+    RecordList highest_mark_records = RecordList_create();
+    float lowest_mark;
+    RecordList lowest_mark_records = RecordList_create();
 
     ID id;
     Row* row;
     TTreeIter it = TTree_iter_start(&db->data);
-
-    // First record
-    assert(TTree_iter_next(&it, &id, &row)); // We know db is not empty
-    uint32_t record_count = 1;
-    double mark_sum = row->mark; // Use double to prevent infinity when adding many finite floats
-    float highest_mark = row->mark;
-    RecordList highest_mark_records = RecordList_create();
-    RecordList_append(&highest_mark_records, row);
-    float lowest_mark = row->mark;
-    RecordList lowest_mark_records = RecordList_create();
-    RecordList_append(&lowest_mark_records, row);
-
-    // Remaining records
     while (TTree_iter_next(&it, &id, &row)) {
         if (!Condition_eval(filter, id, row)) {
             continue;
+        }
+
+        // Special case for first record
+        if (record_count == 0) {
+            highest_mark = row->mark;
+            lowest_mark = row->mark;
         }
 
         record_count++;
@@ -265,6 +260,12 @@ void run_show_summary(const DB* db, const Condition* filter) {
             }
             RecordList_append(&lowest_mark_records, row);
         }
+    }
+
+    // There is no summary to print if no records mathced
+    if (record_count == 0) {
+        fprintf(stdout, "No records matched. Run the INSERT command to add new records.\n");
+        goto cleanup;
     }
 
     double avg_mark = mark_sum / (double)record_count;
@@ -290,6 +291,7 @@ void run_show_summary(const DB* db, const Condition* filter) {
     }
     fprintf(stdout, "\n");
 
+cleanup:
     RecordList_destroy(&highest_mark_records);
     RecordList_destroy(&lowest_mark_records);
 }
