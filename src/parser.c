@@ -29,49 +29,66 @@ typedef struct {
     ExpressionTag tag;
 } Expression;
 
+typedef struct {
+    // Name of the file to open. Cannot be NULL.
+    // This struct does not own this string.
+    char* filename;
+} CmdOpenArgs;
+
+typedef struct {
+    // Name of the file to save to. Can be NULL.
+    // This struct does not own this string.
+    char* filename;
+} CmdSaveArgs;
+
+typedef struct {
+    // How to sort the rows.
+    SortBy sort_by;
+} CmdShowAllArgs;
+
+typedef struct {
+    // Condition to filter rows. If NULL, no filtering is applied.
+    Condition* filter;
+} CmdSummaryArgs;
+
+typedef struct {
+    // Condition to filter rows. Cannot be NULL.
+    Condition* filter;
+    SortBy sort_by;
+} CmdQueryArgs;
+
+typedef struct {
+    // The row to insert.
+    Row row;
+    // The ID of the new row.
+    ID id;
+} CmdInsertArgs;
+
+typedef struct {
+    // The row with the updated values.
+    Row row;
+    // The ID of the row to update.
+    ID id;
+    // Columns that should be updated have their bit set to 1.
+    ColumnsMask update_columns;
+} CmdUpdateArgs;
+
+typedef struct {
+    // The ID of the row to delete.
+    ID id;
+} CmdDeleteArgs;
+
 // A command and the arguments needed to execute it.
 typedef struct {
-    // Strings in this union are references to the original unparsed string, not copies.
     union {
-        struct CmdOpenArgs {
-            // Name of the file to open. Cannot be NULL.
-            char* filename;
-        } open;
-        struct CmdSaveArgs {
-            // Name of the file to save to. Can be NULL.
-            char* filename;
-        } save;
-        struct CmdShowAllArgs {
-            // How to sort the rows.
-            SortBy sort_by;
-        } show_all;
-        struct CmdSummaryArgs {
-            // Condition to filter rows. If NULL, no filtering is applied.
-            Condition* filter;
-        } show_summary;
-        struct CmdQueryArgs {
-            // Condition to filter rows. Cannot be NULL.
-            Condition* filter;
-            SortBy sort_by;
-        } query;
-        struct CmdInsertArgs {
-            // The row to insert.
-            Row row;
-            // The ID of the new row.
-            ID id;
-        } insert;
-        struct CmdUpdateArgs {
-            // The row with the updated values.
-            Row row;
-            // The ID of the row to update.
-            ID id;
-            // Columns that should be updated have their bit set to 1.
-            ColumnsMask update_columns;
-        } update;
-        struct CmdDeleteArgs {
-            // The ID of the row to delete.
-            ID id;
-        } delete;
+        CmdOpenArgs open;
+        CmdSaveArgs save;
+        CmdShowAllArgs show_all;
+        CmdSummaryArgs show_summary;
+        CmdQueryArgs query;
+        CmdInsertArgs insert;
+        CmdUpdateArgs update;
+        CmdDeleteArgs delete;
     } args;
     CommandTag tag;
 } Command;
@@ -553,7 +570,7 @@ static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id
 
 // Parses the arguments for the OPEN command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_open(Tokenizer* tokenizer, struct CmdOpenArgs* out) {
+static bool __parse_open(Tokenizer* tokenizer, CmdOpenArgs* out) {
     Token filename_token = Tokenizer_next(tokenizer);
     if (filename_token.tag != TOKEN_STRING) {
         return false;
@@ -565,7 +582,7 @@ static bool __parse_open(Tokenizer* tokenizer, struct CmdOpenArgs* out) {
 
 // Parses the arguments for the SHOW ALL command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_show_all(Tokenizer* tokenizer, struct CmdShowAllArgs* out) {
+static bool __parse_show_all(Tokenizer* tokenizer, CmdShowAllArgs* out) {
     Token sort_by_token = Tokenizer_next(tokenizer);
     switch (sort_by_token.tag) {
     case TOKEN_EOF:
@@ -583,7 +600,7 @@ static bool __parse_show_all(Tokenizer* tokenizer, struct CmdShowAllArgs* out) {
 
 // Parses the arguments for the SHOW SUMMARY command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_show_summary(Tokenizer* tokenizer, struct CmdSummaryArgs* out) {
+static bool __parse_show_summary(Tokenizer* tokenizer, CmdSummaryArgs* out) {
     if (Tokenizer_peek(tokenizer).tag == TOKEN_EOF) {
         // No condition specified
         out->filter = NULL;
@@ -595,14 +612,14 @@ static bool __parse_show_summary(Tokenizer* tokenizer, struct CmdSummaryArgs* ou
 
 // Parses the arguments for the INSERT command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_insert(Tokenizer* tokenizer, struct CmdInsertArgs* out) {
+static bool __parse_insert(Tokenizer* tokenizer, CmdInsertArgs* out) {
     ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
     return seen_columns == ALL_COLUMNS_MASK;
 }
 
 // Parses the arguments for the QUERY command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_query(Tokenizer* tokenizer, struct CmdQueryArgs* out) {
+static bool __parse_query(Tokenizer* tokenizer, CmdQueryArgs* out) {
     out->filter = __parse_condition(tokenizer);
     if (out->filter == NULL) {
         return false;
@@ -625,7 +642,7 @@ static bool __parse_query(Tokenizer* tokenizer, struct CmdQueryArgs* out) {
 
 // Parses the arguments for the UPDATE command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_update(Tokenizer* tokenizer, struct CmdUpdateArgs* out) {
+static bool __parse_update(Tokenizer* tokenizer, CmdUpdateArgs* out) {
     ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
     // ID column is required
     if ((seen_columns & (1 << COLUMN_ID)) == 0) {
@@ -639,7 +656,7 @@ static bool __parse_update(Tokenizer* tokenizer, struct CmdUpdateArgs* out) {
 
 // Parses the arguments for the DELETE command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_delete(Tokenizer* tokenizer, struct CmdDeleteArgs* out) {
+static bool __parse_delete(Tokenizer* tokenizer, CmdDeleteArgs* out) {
     Token id_col_token = Tokenizer_next(tokenizer);
     if (id_col_token.tag != TOKEN_COLUMN || id_col_token.data.col != COLUMN_ID) {
         return false;
@@ -658,7 +675,7 @@ static bool __parse_delete(Tokenizer* tokenizer, struct CmdDeleteArgs* out) {
 
 // Parses the arguments for the SAVE command from `tokenizer` into `out`.
 // Returns whether parsing was successful.
-static bool __parse_save(Tokenizer* tokenizer, struct CmdSaveArgs* out) {
+static bool __parse_save(Tokenizer* tokenizer, CmdSaveArgs* out) {
     Token filename_token = Tokenizer_next(tokenizer);
     switch (filename_token.tag) {
     case TOKEN_EOF:

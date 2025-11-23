@@ -182,10 +182,10 @@ void run_help(void) {
 
 // Runs the OPEN command. `db` is only overwritten if the operation is successful.
 // Returns whether the operation was successful.
-bool run_open(const char* filename, DB* db) {
-    FILE* file = fopen(filename, "rb");
+bool run_open(DB* db, const CmdOpenArgs* args) {
+    FILE* file = fopen(args->filename, "rb");
     if (file == NULL) {
-        fprintf(stdout, "Error: Could not open file \"%s\".\n", filename);
+        fprintf(stdout, "Error: Could not open file \"%s\".\n", args->filename);
         return false;
     }
 
@@ -196,31 +196,32 @@ bool run_open(const char* filename, DB* db) {
     case ERROR_OK: {
         DB_destroy(db);
         *db = temp_db;
-        fprintf(stdout, "The database file \"%s\" was successfully opened.\n", filename);
+        fprintf(stdout, "The database file \"%s\" was successfully opened.\n", args->filename);
         return true;
     }
     case ERROR_MISSING_TABLE_NAME: {
-        fprintf(stdout, "Error: Missing table name in file \"%s\".\n", filename);
+        fprintf(stdout, "Error: Missing table name in file \"%s\".\n", args->filename);
         return false;
     }
     case ERROR_BAD_DB_FORMAT: {
-        fprintf(stdout, "Error: Unrecognised file format in file \"%s\".\n", filename);
+        fprintf(stdout, "Error: Unrecognised file format in file \"%s\".\n", args->filename);
         return false;
     }
     case ERROR_BAD_DB_COLUMN: {
-        fprintf(stdout, "Error: Unknown, missing or duplicate column in file \"%s\".\n", filename);
+        fprintf(stdout, "Error: Unknown, missing or duplicate column in file \"%s\".\n",
+                args->filename);
         return false;
     }
     case ERROR_UNORDERED_ID: {
         fprintf(stdout, "Error: IDs in file \"%s\" are not in strictly increasing order.\n",
-                filename);
+                args->filename);
         return false;
     }
     }
 }
 
 // Runs the SHOW SUMMARY command.
-void run_show_summary(const DB* db, const Condition* filter) {
+void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     uint64_t record_count = 0;
     double mark_sum = 0.0; // Use double to prevent infinity when adding many finite floats
     float highest_mark;
@@ -232,7 +233,7 @@ void run_show_summary(const DB* db, const Condition* filter) {
     Row* row;
     TTreeIter it = TTree_iter_start(&db->data);
     while (TTree_iter_next(&it, &id, &row)) {
-        if (!Condition_eval(filter, id, row)) {
+        if (!Condition_eval(args->filter, id, row)) {
             continue;
         }
 
@@ -297,13 +298,15 @@ cleanup:
 }
 
 // Runs the INSERT command.
-void run_insert(DB* db, ID id, const Row* row) {
-    if (TTree_insert(&db->data, id, row)) {
-        fprintf(stdout, "A new record with ID=%u was successfully inserted.\n", id);
+void run_insert(DB* db, const CmdInsertArgs* args) {
+    if (TTree_insert(&db->data, args->id, &args->row)) {
+        fprintf(stdout, "A new record with ID=%u was successfully inserted.\n", args->id);
         db->row_count++;
     } else {
-        fprintf(stdout, "A record with ID=%u already exists. The database is left unchanged.\n",
-                id);
+        fprintf(stdout,
+                "A record with ID=%u already exists. The database is left unchanged.\n"
+                "Run the UPDATE command to update an existing record instead.\n",
+                args->id);
     }
 }
 
@@ -338,19 +341,19 @@ int main(void) {
             run_help();
             break;
         case CMD_OPEN:
-            if (run_open(cmd.args.open.filename, &db)) {
+            if (run_open(&db, &cmd.args.open)) {
                 free(last_filename);
                 last_filename = strdup(cmd.args.open.filename);
             }
             break;
         case CMD_SHOW_SUMMARY:
             if (!warn_no_db(&db)) {
-                run_show_summary(&db, cmd.args.show_summary.filter);
+                run_show_summary(&db, &cmd.args.show_summary);
             }
             break;
         case CMD_INSERT:
             if (!warn_no_db(&db)) {
-                run_insert(&db, cmd.args.insert.id, &cmd.args.insert.row);
+                run_insert(&db, &cmd.args.insert);
             }
             break;
         default:
