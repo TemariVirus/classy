@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,10 @@
 #include "error.c"
 #include "parser.c"
 #include "tokenizer.c"
+
+#define TYPE Row*
+#define TYPED(THING) Record##THING
+#include "list.c"
 
 #define LINE_BUF_SIZE 4096
 #define USER_NAME "P1_1"
@@ -51,7 +56,18 @@ char* get_line(char* buf, size_t size) {
     return NULL;
 }
 
-// Runs the help command.
+// Prints a warning to stdout if `db` is not initialised (i.e., it has no table name).
+// Returns whether the warning was printed.
+bool warn_no_db(const DB* db) {
+    if (db->table_name == NULL) {
+        fprintf(stdout, "There is no active database. Run the OPEN command to load an active "
+                        "database from a file.\n");
+        return true;
+    }
+    return false;
+}
+
+// Runs the HELP command.
 void run_help(void) {
     fprintf(stdout,
             "Commands are single-line and cannot exceed %d characters in length. All commands are "
@@ -164,7 +180,7 @@ void run_help(void) {
         "\n");
 }
 
-// Runs the open command. `db` is only overwritten if the operation is successful.
+// Runs the OPEN command. `db` is only overwritten if the operation is successful.
 // Returns whether the operation was successful.
 bool run_open(const char* filename, DB* db) {
     FILE* file = fopen(filename, "rb");
@@ -203,6 +219,81 @@ bool run_open(const char* filename, DB* db) {
     }
 }
 
+// Runs the SHOW SUMMARY command.
+void run_show_summary(const DB* db, const Condition* filter) {
+    if (db->row_count == 0) {
+        fprintf(stdout, "There are no records in the table \"%s\".\n", db->table_name);
+        return;
+    }
+
+    ID id;
+    Row* row;
+    TTreeIter it = TTree_iter_start(&db->data);
+
+    // First record
+    assert(TTree_iter_next(&it, &id, &row)); // We know db is not empty
+    uint32_t record_count = 1;
+    double mark_sum = row->mark; // Use double to prevent infinity when adding many finite floats
+    float highest_mark = row->mark;
+    RecordList highest_mark_records = RecordList_create();
+    RecordList_append(&highest_mark_records, row);
+    float lowest_mark = row->mark;
+    RecordList lowest_mark_records = RecordList_create();
+    RecordList_append(&lowest_mark_records, row);
+
+    // Remaining records
+    while (TTree_iter_next(&it, &id, &row)) {
+        if (!Condition_eval(filter, id, row)) {
+            continue;
+        }
+
+        record_count++;
+        mark_sum += row->mark;
+        // Check for new record with highest mark
+        if (row->mark >= highest_mark) {
+            if (row->mark > highest_mark) {
+                highest_mark = row->mark;
+                RecordList_clear(&highest_mark_records);
+            }
+            RecordList_append(&highest_mark_records, row);
+        }
+        // Check for new record with lowest mark
+        if (row->mark <= lowest_mark) {
+            if (row->mark < lowest_mark) {
+                lowest_mark = row->mark;
+                RecordList_clear(&lowest_mark_records);
+            }
+            RecordList_append(&lowest_mark_records, row);
+        }
+    }
+
+    double avg_mark = mark_sum / (double)record_count;
+    fprintf(stdout, "Here is a summary of the table \"%s\".\n", db->table_name);
+    fprintf(stdout, "Number of students matched: %d\n", record_count);
+    fprintf(stdout, "Average mark:               %.1f\n", avg_mark);
+
+    fprintf(stdout, "Highest mark:               %.1f by ", highest_mark);
+    assert(highest_mark_records.length > 0);
+    fprintf(stdout, "%s", highest_mark_records.items[0]->name);
+    for (size_t i = 1; i < highest_mark_records.length; i++) {
+        Row* row = RecordList_get(&highest_mark_records, i);
+        fprintf(stdout, ", %s", row->name);
+    }
+    fprintf(stdout, "\n");
+
+    fprintf(stdout, "Lowest mark:                %.1f by ", lowest_mark);
+    assert(lowest_mark_records.length > 0);
+    fprintf(stdout, "%s", lowest_mark_records.items[0]->name);
+    for (size_t i = 1; i < lowest_mark_records.length; i++) {
+        Row* row = RecordList_get(&lowest_mark_records, i);
+        fprintf(stdout, ", %s", row->name);
+    }
+    fprintf(stdout, "\n");
+
+    RecordList_destroy(&highest_mark_records);
+    RecordList_destroy(&lowest_mark_records);
+}
+
 int main(void) {
 #if defined(_WIN32)
     // Needed on Windows to print utf-8 to the terminal
@@ -210,12 +301,7 @@ int main(void) {
 #endif
     print_startup_message();
 
-    // db is initialised only if last_filename is not NULL
-    DB db = (DB){
-        .data = TTree_create(),
-        .row_count = 0,
-        .table_name = NULL,
-    };
+    DB db = DB_create();
     char* last_filename = NULL;
 
     char line_buf[LINE_BUF_SIZE];
@@ -242,6 +328,11 @@ int main(void) {
             if (run_open(cmd.args.open.filename, &db)) {
                 free(last_filename);
                 last_filename = strdup(cmd.args.open.filename);
+            }
+            break;
+        case CMD_SHOW_SUMMARY:
+            if (!warn_no_db(&db)) {
+                run_show_summary(&db, cmd.args.show_summary.filter);
             }
             break;
         default:

@@ -25,6 +25,17 @@ typedef struct DB {
     char* table_name;
 } DB;
 
+// Create an empty database.
+//
+// The DB must be destroyed with `DB_destroy` to free memory.
+DB DB_create(void) {
+    return (DB){
+        .data = TTree_create(),
+        .row_count = 0,
+        .table_name = NULL,
+    };
+}
+
 // Free all memory used by the database.
 void DB_destroy(DB* db) {
     if (db == NULL) {

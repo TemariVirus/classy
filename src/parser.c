@@ -4,41 +4,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "condition.c"
 #include "tokenizer.c"
 #include "unreachable.c"
-
-struct Condition;
-// Strings in this union are references to the original unparsed string, not copies.
-typedef union {
-    struct {
-        // The active field depends on the column.
-        union EqGtLtValue {
-            uint32_t ui;
-            float f;
-            char* s;
-        } value;
-        // Any column.
-        Column column;
-    } eq_gt_lt;
-    struct {
-        char* value;
-        // Any string column.
-        Column column;
-    } in;
-    struct {
-        struct Condition* cond;
-    } not;
-    struct {
-        struct Condition* lhs;
-        struct Condition* rhs;
-    } and_or;
-} ConditionArgs;
-
-// A condition used for filtering rows.
-typedef struct Condition {
-    ConditionArgs args;
-    OpTag tag;
-} Condition;
 
 typedef enum {
     EXPR_INT,
@@ -239,25 +207,6 @@ static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
     UNREACHABLE;
 }
 
-// Recursively free the memory used by a condition.
-static void __condition_destroy(Condition* cond) {
-    if (cond == NULL) {
-        return;
-    }
-    switch (cond->tag) {
-    case OP_NOT:
-        __condition_destroy(cond->args.not.cond);
-        break;
-    case OP_AND:
-    case OP_OR:
-        __condition_destroy(cond->args.and_or.lhs);
-        __condition_destroy(cond->args.and_or.rhs);
-        break;
-    default:
-        break;
-    }
-}
-
 // Free all memory used by an expression.
 static void __expression_destroy(Expression* expr) {
     if (expr == NULL) {
@@ -265,7 +214,7 @@ static void __expression_destroy(Expression* expr) {
     }
     switch (expr->tag) {
     case EXPR_CONDITION:
-        __condition_destroy(expr->value.cond);
+        Condition_destroy(expr->value.cond);
         break;
     default:
         break;
@@ -279,10 +228,10 @@ void Command_destroy(Command* cmd) {
     }
     switch (cmd->tag) {
     case CMD_SHOW_SUMMARY:
-        __condition_destroy(cmd->args.show_summary.filter);
+        Condition_destroy(cmd->args.show_summary.filter);
         break;
     case CMD_QUERY:
-        __condition_destroy(cmd->args.query.filter);
+        Condition_destroy(cmd->args.query.filter);
         break;
     default:
         break;
@@ -531,7 +480,7 @@ error_cleanup:
 // Consumes tokens from `tokenizer` to parse a condition.
 // Returns the parsed condition, or NULL on error.
 //
-// The returned condition must be freed with `__condition_destroy`.
+// The returned condition must be freed with `Condition_destroy`.
 static Condition* __parse_condition(Tokenizer* tokenizer) {
     Expression expr = (Expression){0};
     if (!__parse_expression(tokenizer, 0, &expr)) {
