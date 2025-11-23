@@ -221,7 +221,7 @@ bool run_open(const char* filename, DB* db) {
 
 // Runs the SHOW SUMMARY command.
 void run_show_summary(const DB* db, const Condition* filter) {
-    uint32_t record_count = 0;
+    uint64_t record_count = 0;
     double mark_sum = 0.0; // Use double to prevent infinity when adding many finite floats
     float highest_mark;
     RecordList highest_mark_records = RecordList_create();
@@ -270,7 +270,7 @@ void run_show_summary(const DB* db, const Condition* filter) {
 
     double avg_mark = mark_sum / (double)record_count;
     fprintf(stdout, "Here is a summary of the table \"%s\".\n", db->table_name);
-    fprintf(stdout, "Number of students matched: %d\n", record_count);
+    fprintf(stdout, "Number of students matched: %llu\n", record_count);
     fprintf(stdout, "Average mark:               %.1f\n", avg_mark);
 
     fprintf(stdout, "Highest mark:               %.1f by ", highest_mark);
@@ -294,6 +294,17 @@ void run_show_summary(const DB* db, const Condition* filter) {
 cleanup:
     RecordList_destroy(&highest_mark_records);
     RecordList_destroy(&lowest_mark_records);
+}
+
+// Runs the INSERT command.
+void run_insert(DB* db, ID id, const Row* row) {
+    if (TTree_insert(&db->data, id, row)) {
+        fprintf(stdout, "A new record with ID=%u was successfully inserted.\n", id);
+        db->row_count++;
+    } else {
+        fprintf(stdout, "A record with ID=%u already exists. The database is left unchanged.\n",
+                id);
+    }
 }
 
 int main(void) {
@@ -335,6 +346,11 @@ int main(void) {
         case CMD_SHOW_SUMMARY:
             if (!warn_no_db(&db)) {
                 run_show_summary(&db, cmd.args.show_summary.filter);
+            }
+            break;
+        case CMD_INSERT:
+            if (!warn_no_db(&db)) {
+                run_insert(&db, cmd.args.insert.id, &cmd.args.insert.row);
             }
             break;
         default:
