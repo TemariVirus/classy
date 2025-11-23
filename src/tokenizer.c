@@ -145,7 +145,6 @@ const char* Column_name(Column column) {
     case COLUMN_MARK:
         return "Mark";
     }
-    UNREACHABLE;
 }
 
 // Returns the Column represented by the start of the string.

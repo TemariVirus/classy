@@ -8,6 +8,12 @@
 #include "string_helper.c"
 
 typedef enum {
+    VALUE_INT,
+    VALUE_FLOAT,
+    VALUE_STRING,
+} ValueTag;
+
+typedef enum {
     COLUMN_ID = 0,
     COLUMN_NAME = 1,
     COLUMN_PROGRAMME = 2,
@@ -29,6 +35,19 @@ typedef struct {
     // However, it may be used by some operations to avoid memory allocations.
     uint32_t temp_id;
 } Row;
+
+// The data type of a column.
+ValueTag Column_type(Column column) {
+    switch (column) {
+    case COLUMN_ID:
+        return VALUE_INT;
+    case COLUMN_MARK:
+        return VALUE_FLOAT;
+    case COLUMN_NAME:
+    case COLUMN_PROGRAMME:
+        return VALUE_STRING;
+    }
+}
 
 // Returns whether the bit of the specified column is set.
 bool ColumnsMask_get(const ColumnsMask* mask, Column column) {

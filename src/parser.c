@@ -96,19 +96,6 @@ typedef struct {
 
 static bool __parse_expression(Tokenizer*, uint8_t, Expression*);
 
-// The data type of a column.
-static ExpressionTag __column_type(Column column) {
-    switch (column) {
-    case COLUMN_ID:
-        return EXPR_INT;
-    case COLUMN_MARK:
-        return EXPR_FLOAT;
-    case COLUMN_NAME:
-    case COLUMN_PROGRAMME:
-        return EXPR_STRING;
-    }
-}
-
 // Writes the right binding power of a prefix operator to `rbp`.
 // Returns whether `op` is a valid prefix operator.
 static bool __prefix_binding_power(OpTag op, uint8_t* rbp) {
@@ -162,9 +149,9 @@ static bool __op_supports_lhs(OpTag op, Expression lhs) {
         if (lhs.tag != EXPR_COLUMN) {
             return false;
         }
-        switch (__column_type(lhs.value.column)) {
-        case EXPR_INT:
-        case EXPR_FLOAT:
+        switch (Column_type(lhs.value.column)) {
+        case VALUE_INT:
+        case VALUE_FLOAT:
             return true;
         default:
             return false;
@@ -184,8 +171,8 @@ static bool __op_supports_lhs(OpTag op, Expression lhs) {
 // Returns whether the coercion was successful.
 static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
                                     union EqGtLtValue* out_value) {
-    switch (__column_type(lhs_column)) {
-    case EXPR_INT:
+    switch (Column_type(lhs_column)) {
+    case VALUE_INT:
         switch (rhs.tag) {
         case EXPR_INT:
             out_value->ui = rhs.value.ui;
@@ -193,7 +180,7 @@ static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
         default:
             return false;
         }
-    case EXPR_FLOAT:
+    case VALUE_FLOAT:
         switch (rhs.tag) {
         case EXPR_INT:
             out_value->f = rhs.value.ui;
@@ -204,7 +191,7 @@ static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
         default:
             return false;
         }
-    case EXPR_STRING:
+    case VALUE_STRING:
         switch (rhs.tag) {
         case EXPR_STRING:
             out_value->s = rhs.value.s;
@@ -212,11 +199,7 @@ static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
         default:
             return false;
         }
-    default:
-        break;
     }
-
-    UNREACHABLE;
 }
 
 // Free all memory used by an expression.
@@ -275,10 +258,8 @@ static Expression __expression_from_token(Token token) {
             .value.f = token.data.f,
         };
     default:
-        break;
+        UNREACHABLE;
     }
-
-    UNREACHABLE;
 }
 
 // Create a condition at `out_expr` with the prefix operator `op`,
@@ -363,7 +344,7 @@ static bool __infixed_condition(Expression lhs, OpTag op, uint8_t rbp, Tokenizer
         }
         break;
     case OP_IN:
-        if (rhs.tag != EXPR_COLUMN || __column_type(rhs.value.column) != EXPR_STRING) {
+        if (rhs.tag != EXPR_COLUMN || Column_type(rhs.value.column) != VALUE_STRING) {
             goto error_cleanup;
         }
         cond->args.in.column = rhs.value.column;
