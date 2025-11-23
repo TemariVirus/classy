@@ -1,3 +1,4 @@
+#define __STDC_WANT_LIB_EXT2__ 1
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,6 +11,7 @@
 #include "db.c"
 #include "error.c"
 #include "parser.c"
+#include "row.c"
 #include "tokenizer.c"
 
 #define TYPE Row*
@@ -310,6 +312,42 @@ void run_insert(DB* db, const CmdInsertArgs* args) {
     }
 }
 
+// Run the UPDATE command.
+void run_update(const DB* db, const CmdUpdateArgs* args) {
+    Row* record = TTree_get(&db->data, args->id);
+    if (record == NULL) {
+        fprintf(
+            stdout,
+            "The record with ID=%u does not exist. Run the INSERT command to insert it instead.\n",
+            args->id);
+        return;
+    }
+
+    for (Column column = 0; column < COLUMN_COUNT; column++) {
+        if (!ColumnsMask_get(&args->update_columns, column)) {
+            continue;
+        }
+
+        switch (column) {
+        case COLUMN_ID:
+            // ID cannot be updated
+            break;
+        case COLUMN_NAME:
+            free(record->name);
+            record->name = strdup(args->row.name);
+            break;
+        case COLUMN_PROGRAMME:
+            free(record->programme);
+            record->programme = strdup(args->row.programme);
+            break;
+        case COLUMN_MARK:
+            record->mark = args->row.mark;
+            break;
+        }
+    }
+    fprintf(stdout, "The record with ID=%u was successfully updated.\n", args->id);
+}
+
 int main(void) {
 #if defined(_WIN32)
     // Needed on Windows to print utf-8 to the terminal
@@ -354,6 +392,11 @@ int main(void) {
         case CMD_INSERT:
             if (!warn_no_db(&db)) {
                 run_insert(&db, &cmd.args.insert);
+            }
+            break;
+        case CMD_UPDATE:
+            if (!warn_no_db(&db)) {
+                run_update(&db, &cmd.args.update);
             }
             break;
         default:
