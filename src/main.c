@@ -33,8 +33,12 @@ void print_startup_message(void) {
 void print_prompt(const char* prompt_name) { fprintf(stdout, "%s: ", prompt_name); }
 
 // Reads a line from stdin into buf of size `size`.
+// The trailing newline character is trimmed.
+// `size` must be at least 2.
+//
 // Returns buf on success, NULL if the line is too long.
 char* get_line(char* buf, size_t size) {
+    assert(size >= 2);
     if (fgets(buf, size, stdin) == NULL) {
         // EOF or error
         return NULL;
@@ -50,6 +54,7 @@ char* get_line(char* buf, size_t size) {
 
     // Line too long
     if (newline_offset >= size - 1) {
+        print_prompt(SYSTEM_NAME);
         fprintf(stdout, "Input line too long. Maximum length is %zu characters.\n", size - 2);
         // Clear the rest of the line from stdin
         for (int c = fgetc(stdin); c != '\n' && c != EOF; c = fgetc(stdin)) {
@@ -348,6 +353,31 @@ void run_update(const DB* db, const CmdUpdateArgs* args) {
     fprintf(stdout, "The record with ID=%u was successfully updated.\n", args->id);
 }
 
+// Runs the DELETE command.
+void run_delete(DB* db, const CmdDeleteArgs* args) {
+    if (TTree_get(&db->data, args->id) == NULL) {
+        fprintf(stdout, "The record with ID=%u does not exist.\n", args->id);
+        return;
+    }
+    fprintf(stdout,
+            "Are you sure you want to delete the record with ID=%u? Type \"Y\" to confirm or "
+            "type \"N\" to cancel.\n",
+            args->id);
+
+    print_prompt(USER_NAME);
+    char confirmation_buf[3];
+    char* confirmation = get_line(confirmation_buf, sizeof(confirmation_buf));
+
+    print_prompt(SYSTEM_NAME);
+    if (confirmation == NULL || strcmp(confirmation, "Y") != 0) {
+        fprintf(stdout, "The deletion is cancelled.\n");
+        return;
+    }
+    TTree_remove(&db->data, args->id);
+    fprintf(stdout, "The record with ID=%u was successfully deleted.\n", args->id);
+    db->row_count--;
+}
+
 int main(void) {
 #if defined(_WIN32)
     // Needed on Windows to print utf-8 to the terminal
@@ -397,6 +427,11 @@ int main(void) {
         case CMD_UPDATE:
             if (!warn_no_db(&db)) {
                 run_update(&db, &cmd.args.update);
+            }
+            break;
+        case CMD_DELETE:
+            if (!warn_no_db(&db)) {
+                run_delete(&db, &cmd.args.delete);
             }
             break;
         default:
