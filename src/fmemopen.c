@@ -9,8 +9,6 @@
 // Windows does not have fmemopen, so we fake it by opening a temporary file
 // Original fmemopen docs: https://www.man7.org/linux/man-pages/man3/fmemopen.3.html
 FILE* fmemopen(void* buf, size_t size, const char* __modes) {
-    (void)__modes;
-
     FILE* fptr;
     if (tmpfile_s(&fptr) != 0) {
         return NULL;
