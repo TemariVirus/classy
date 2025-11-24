@@ -15,6 +15,7 @@
 #include "quicksort.c"
 #include "row.c"
 #include "tokenizer.c"
+#include "save.c"
 
 #define TYPE Row*
 #define TYPED(THING) Record##THING
@@ -483,6 +484,25 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
     db->row_count--;
 }
 
+// Runs the SAVE command.
+void run_save(DB* db, const char* filename, char** last_filename) {
+    const char* save_filename = filename ? filename : *last_filename;
+    if (!save_filename) {
+        fprintf(stdout, "No filename specified and no previous file to save to.\n");
+        return;
+    }
+
+    if (DB_save(db, save_filename)) {
+        fprintf(stdout, "The database file \"%s\" is successfully saved.\n", save_filename);
+        if (filename) {
+            free(*last_filename);
+            *last_filename = strdup(filename);
+        }
+    } else {
+        fprintf(stdout, "Failed to save the database to \"%s\".\n", save_filename);
+    }
+}
+
 int main(void) {
 #if defined(_WIN32)
     // Needed on Windows to print utf-8 to the terminal
@@ -600,7 +620,9 @@ int main(void) {
             }
             break;
         case CMD_SAVE:
-            fprintf(stdout, "TODO\n");
+        if (!warn_no_db(&db)) {
+                run_save(&db, cmd.args.save.filename, &last_filename);
+            }
             break;
         }
 
