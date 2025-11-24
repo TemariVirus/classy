@@ -123,9 +123,9 @@ TEST parser_insert(void) {
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_INSERT, command.tag);
         EXPECT_INT_EQUAL(123, command.args.insert.id);
-        EXPECT_STRING_EQUAL("John Doe", command.args.insert.row.name);
-        EXPECT_INT_EQUAL(95, command.args.insert.row.mark);
-        EXPECT_STRING_EQUAL("abc \\ xyz", command.args.insert.row.programme);
+        EXPECT_STRING_EQUAL("John Doe", command.args.insert.values.name);
+        EXPECT_INT_EQUAL(95, command.args.insert.values.mark);
+        EXPECT_STRING_EQUAL("abc \\ xyz", command.args.insert.values.programme);
         Command_destroy(&command);
     }
 
@@ -352,8 +352,8 @@ TEST parser_update(void) {
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
         EXPECT_INT_EQUAL(123, command.args.update.id);
-        EXPECT_STRING_EQUAL("John Doe", command.args.update.row.name);
-        EXPECT_INT_EQUAL(95, command.args.update.row.mark);
+        EXPECT_STRING_EQUAL("John Doe", command.args.update.values.name);
+        EXPECT_INT_EQUAL(95, command.args.update.values.mark);
         EXPECT_INT_EQUAL((1 << COLUMN_NAME) | (1 << COLUMN_MARK),
                          command.args.update.update_columns);
         Command_destroy(&command);
@@ -371,9 +371,9 @@ TEST parser_update(void) {
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
         EXPECT_INT_EQUAL(123, command.args.update.id);
-        EXPECT_STRING_EQUAL("John Doe", command.args.update.row.name);
-        EXPECT_INT_EQUAL(95, command.args.update.row.mark);
-        EXPECT_STRING_EQUAL("abc \\ xyz", command.args.update.row.programme);
+        EXPECT_STRING_EQUAL("John Doe", command.args.update.values.name);
+        EXPECT_INT_EQUAL(95, command.args.update.values.mark);
+        EXPECT_STRING_EQUAL("abc \\ xyz", command.args.update.values.programme);
         EXPECT_INT_EQUAL((1 << COLUMN_NAME) | (1 << COLUMN_PROGRAMME) | (1 << COLUMN_MARK),
                          command.args.update.update_columns);
         Command_destroy(&command);

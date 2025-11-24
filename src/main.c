@@ -14,10 +14,10 @@
 #include "error.c"
 #include "parser.c"
 #include "quicksort.c"
-#include "row.c"
+#include "record.c"
 #include "tokenizer.c"
 
-#define TYPE Row*
+#define TYPE Record*
 #define TYPED(THING) Record##THING
 #include "list.c"
 
@@ -85,7 +85,7 @@ void print_columns(void) {
 
 // Pretty prints the record to stdout. This is meant to be used in tandem with `print_columns`.
 // The `temp_id` member of the record must be set to its respective ID.
-void print_record(const Row* record) {
+void print_record(const Record* record) {
     fprintf(stdout, "%-10u %-25s %-35s %-6.1f\n", record->temp_id, record->name, record->programme,
             record->mark);
 }
@@ -116,7 +116,7 @@ void run_help(void) {
                     "\n"
                     "SHOW ALL [SORT BY column [ASC|DESC]]\n"
                     "\n"
-                    "Displays all rows in the active database.\n"
+                    "Displays all records in the active database.\n"
                     "If the sort column is not specified, it defaults to ID.\n"
                     "If the sort order is not specified, it defaults to ASC.\n"
                     "\n"
@@ -124,7 +124,7 @@ void run_help(void) {
                     "\n"
                     "INSERT ID=id Name=\"name\" Programme=\"programme\" Mark=mark\n"
                     "\n"
-                    "Inserts a new row into the active database.\n"
+                    "Inserts a new record into the active database.\n"
                     "\n"
                     "ID is a 32-bit unsigned integer.\n"
                     "Name and Programme are strings and must be enclosed in double quotes "
@@ -133,7 +133,7 @@ void run_help(void) {
                     "\n"
                     "The columns may be in any order, but must appear exactly once.\n"
                     "\n"
-                    "Row values cannot contain newlines (\\n).\n"
+                    "Record values cannot contain newlines (\\n).\n"
                     "Double quotes (\") and backslashes (\\) within string values must be\n"
                     "escaped by preceding them with a backslash.\n"
                     "\n"
@@ -141,7 +141,7 @@ void run_help(void) {
                     "\n"
                     "QUERY condition\n"
                     "\n"
-                    "Displays all rows in the active database that satisfy `condition`.\n"
+                    "Displays all records in the active database that satisfy `condition`.\n"
                     "\n"
                     "`condition` may be composed of the following operations,\n"
                     "ordered by highest to lowest precedence:\n"
@@ -166,16 +166,16 @@ void run_help(void) {
                     "\n"
                     "SHOW SUMMARY [condition]\n"
                     "\n"
-                    "Displays a summary of all rows in the active database that satisfy "
+                    "Displays a summary of all records in the active database that satisfy "
                     "`condition`.\n"
                     "`condition` is as defined in QUERY.\n"
-                    "If condition is not given, all rows in the active database are used.\n"
+                    "If condition is not given, all records in the active database are used.\n"
                     "\n"
                     "--------------------------------------------------------------------\n"
                     "\n"
                     "UPDATE ID=id column=value...\n"
                     "\n"
-                    "Updates the values of the columns in the row with the specified\n"
+                    "Updates the values of the columns in the record with the specified\n"
                     "ID, if it exists.\n"
                     "\n"
                     "The columns may be in any order, but cannot appear more than once.\n"
@@ -187,7 +187,7 @@ void run_help(void) {
                     "\n"
                     "DELETE ID=id\n"
                     "\n"
-                    "Deletes the row with the specified ID from the active database.\n"
+                    "Deletes the record with the specified ID from the active database.\n"
                     "\n"
                     "--------------------------------------------------------------------\n"
                     "\n"
@@ -248,13 +248,13 @@ bool run_open(DB* db, const CmdOpenArgs* args) {
 
 // Runs the SHOW ALL command.
 void run_show_all(const DB* db, const CmdShowAllArgs* args) {
-    if (db->row_count == 0) {
+    if (db->record_count == 0) {
         fprintf(stdout, "There are no records in the table \"%s\".\n", db->table_name);
         return;
     }
 
     ID id;
-    Row* record;
+    Record* record;
     TTreeIter it = TTree_iter_start(&db->data);
     // Iterator already iterates in ascending order of ID, no need to sort in that case
     if (args->sort_by.column == COLUMN_ID && args->sort_by.ascending) {
@@ -268,7 +268,7 @@ void run_show_all(const DB* db, const CmdShowAllArgs* args) {
     }
 
     // Copy records to flat array so they can be sorted
-    Row** records = malloc(sizeof(Row*) * db->row_count);
+    Record** records = malloc(sizeof(Record*) * db->record_count);
     if (records == NULL) {
         fprintf(stdout, "ERROR: Out of memory.\n");
         return;
@@ -279,12 +279,12 @@ void run_show_all(const DB* db, const CmdShowAllArgs* args) {
     }
 
     // Sort records
-    quicksort(records, db->row_count, sizeof(Row*), cmp_row, &args->sort_by);
+    quicksort(records, db->record_count, sizeof(Record*), cmp_record, &args->sort_by);
 
     // Print records
     fprintf(stdout, "Here are all the records in the table \"%s\".\n", db->table_name);
     print_columns();
-    for (size_t i = 0; i < db->row_count; i++) {
+    for (size_t i = 0; i < db->record_count; i++) {
         print_record(records[i]);
     }
 
@@ -303,36 +303,36 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
 
     // Generate summary
     ID id;
-    Row* row;
+    Record* record;
     TTreeIter it = TTree_iter_start(&db->data);
-    while (TTree_iter_next(&it, &id, &row)) {
-        if (!Condition_eval(args->filter, id, row)) {
+    while (TTree_iter_next(&it, &id, &record)) {
+        if (!Condition_eval(args->filter, id, record)) {
             continue;
         }
 
         // Special case for first record
         if (record_count == 0) {
-            highest_mark = row->mark;
-            lowest_mark = row->mark;
+            highest_mark = record->mark;
+            lowest_mark = record->mark;
         }
 
         record_count++;
-        mark_sum += row->mark;
+        mark_sum += record->mark;
         // Check for new record with highest mark
-        if (row->mark >= highest_mark) {
-            if (row->mark > highest_mark) {
-                highest_mark = row->mark;
+        if (record->mark >= highest_mark) {
+            if (record->mark > highest_mark) {
+                highest_mark = record->mark;
                 RecordList_clear(&highest_mark_records);
             }
-            RecordList_append(&highest_mark_records, row);
+            RecordList_append(&highest_mark_records, record);
         }
         // Check for new record with lowest mark
-        if (row->mark <= lowest_mark) {
-            if (row->mark < lowest_mark) {
-                lowest_mark = row->mark;
+        if (record->mark <= lowest_mark) {
+            if (record->mark < lowest_mark) {
+                lowest_mark = record->mark;
                 RecordList_clear(&lowest_mark_records);
             }
-            RecordList_append(&lowest_mark_records, row);
+            RecordList_append(&lowest_mark_records, record);
         }
     }
 
@@ -352,8 +352,8 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     assert(highest_mark_records.length > 0);
     fprintf(stdout, "%s", highest_mark_records.items[0]->name);
     for (size_t i = 1; i < highest_mark_records.length; i++) {
-        Row* row = RecordList_get(&highest_mark_records, i);
-        fprintf(stdout, ", %s", row->name);
+        Record* record = RecordList_get(&highest_mark_records, i);
+        fprintf(stdout, ", %s", record->name);
     }
     fprintf(stdout, "\n");
 
@@ -361,8 +361,8 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     assert(lowest_mark_records.length > 0);
     fprintf(stdout, "%s", lowest_mark_records.items[0]->name);
     for (size_t i = 1; i < lowest_mark_records.length; i++) {
-        Row* row = RecordList_get(&lowest_mark_records, i);
-        fprintf(stdout, ", %s", row->name);
+        Record* record = RecordList_get(&lowest_mark_records, i);
+        fprintf(stdout, ", %s", record->name);
     }
     fprintf(stdout, "\n");
 
@@ -373,9 +373,9 @@ cleanup:
 
 // Runs the INSERT command.
 void run_insert(DB* db, const CmdInsertArgs* args) {
-    if (TTree_insert(&db->data, args->id, &args->row)) {
+    if (TTree_insert(&db->data, args->id, &args->values)) {
         fprintf(stdout, "A new record with ID=%u was successfully inserted.\n", args->id);
-        db->row_count++;
+        db->record_count++;
     } else {
         fprintf(stdout,
                 "A record with ID=%u already exists. The database is left unchanged.\n"
@@ -387,7 +387,7 @@ void run_insert(DB* db, const CmdInsertArgs* args) {
 // Runs the QUERY command.
 void run_query(const DB* db, const CmdQueryArgs* args) {
     ID id;
-    Row* record;
+    Record* record;
     TTreeIter it = TTree_iter_start(&db->data);
 
     // Copy records to flat array so they can be sorted
@@ -406,7 +406,7 @@ void run_query(const DB* db, const CmdQueryArgs* args) {
     } else {
         // Iterator already iterates in ascending order of ID, no need to sort in that case
         if (args->sort_by.column != COLUMN_ID || !args->sort_by.ascending) {
-            quicksort(records.items, records.length, sizeof(Row*), cmp_row, &args->sort_by);
+            quicksort(records.items, records.length, sizeof(Record*), cmp_record, &args->sort_by);
         }
 
         // Print records
@@ -422,7 +422,7 @@ void run_query(const DB* db, const CmdQueryArgs* args) {
 
 // Run the UPDATE command.
 void run_update(const DB* db, const CmdUpdateArgs* args) {
-    Row* record = TTree_get(&db->data, args->id);
+    Record* record = TTree_get(&db->data, args->id);
     if (record == NULL) {
         fprintf(
             stdout,
@@ -443,14 +443,14 @@ void run_update(const DB* db, const CmdUpdateArgs* args) {
             break;
         case COLUMN_NAME:
             free(record->name);
-            record->name = strdup(args->row.name);
+            record->name = strdup(args->values.name);
             break;
         case COLUMN_PROGRAMME:
             free(record->programme);
-            record->programme = strdup(args->row.programme);
+            record->programme = strdup(args->values.programme);
             break;
         case COLUMN_MARK:
-            record->mark = args->row.mark;
+            record->mark = args->values.mark;
             break;
         }
     }
@@ -482,7 +482,7 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
     // User typed Y
     TTree_remove(&db->data, args->id);
     fprintf(stdout, "The record with ID=%u was successfully deleted.\n", args->id);
-    db->row_count--;
+    db->record_count--;
 }
 
 // Runs the SAVE command.

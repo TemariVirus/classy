@@ -36,7 +36,7 @@ typedef struct {
     // This member is unused padding and carries no meaning.
     // However, it may be used by some operations to avoid memory allocations.
     uint32_t temp_id;
-} Row;
+} Record;
 
 // The data type of a column.
 ValueTag Column_type(Column column) {
@@ -162,14 +162,13 @@ bool escape_string(FILE* fptr, const char* str) {
     return fputc('"', fptr) != EOF;
 }
 
-// Returns the value of the specified column of the given row.
+// Returns the value of the specified column of the given record.
 // The data type of `column` must be VALUE_INT.
-// The `temp_id` member must be set to the row's ID.
-uint32_t Row_get_int(const Row* row, Column column) {
-    (void)row;
+// The `temp_id` member must be set to the record's ID.
+uint32_t Record_get_int(const Record* record, Column column) {
     switch (column) {
     case COLUMN_ID:
-        return row->temp_id;
+        return record->temp_id;
     case COLUMN_NAME:
     case COLUMN_PROGRAMME:
     case COLUMN_MARK:
@@ -177,12 +176,12 @@ uint32_t Row_get_int(const Row* row, Column column) {
     }
 }
 
-// Returns the value of the specified column of the given row.
+// Returns the value of the specified column of the given record.
 // The data type of `column` must be VALUE_FLOAT.
-float Row_get_float(const Row* row, Column column) {
+float Record_get_float(const Record* record, Column column) {
     switch (column) {
     case COLUMN_MARK:
-        return row->mark;
+        return record->mark;
     case COLUMN_ID:
     case COLUMN_NAME:
     case COLUMN_PROGRAMME:
@@ -190,31 +189,31 @@ float Row_get_float(const Row* row, Column column) {
     }
 }
 
-// Returns the value of the specified column of the given row.
+// Returns the value of the specified column of the given record.
 // The data type of `column` must be VALUE_STRING.
-char* Row_get_string(const Row* row, Column column) {
+char* Record_get_string(const Record* record, Column column) {
     switch (column) {
     case COLUMN_NAME:
-        return row->name;
+        return record->name;
     case COLUMN_PROGRAMME:
-        return row->programme;
+        return record->programme;
     case COLUMN_ID:
     case COLUMN_MARK:
         UNREACHABLE;
     }
 }
 
-// Duplicate a row and its pointers.
-Row Row_dupe(const Row* row) {
-    return (Row){
-        .name = strdup(row->name),
-        .programme = strdup(row->programme),
-        .mark = row->mark,
+// Duplicate a record and its pointers.
+Record Record_dupe(const Record* record) {
+    return (Record){
+        .name = strdup(record->name),
+        .programme = strdup(record->programme),
+        .mark = record->mark,
     };
 }
 
-// Free the pointers of a row.
-void Row_destroy(Row* row) {
-    free(row->name);
-    free(row->programme);
+// Free the pointers of a record.
+void Record_destroy(Record* record) {
+    free(record->name);
+    free(record->programme);
 }

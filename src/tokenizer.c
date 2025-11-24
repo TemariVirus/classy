@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "row.c"
+#include "record.c"
 #include "string_helper.c"
 
 typedef enum {

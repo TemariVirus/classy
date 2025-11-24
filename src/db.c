@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "error.c"
-#include "row.c"
+#include "record.c"
 #include "string_helper.c"
 #include "t-tree.c"
 #include "tokenizer.c"
@@ -18,10 +18,10 @@
 #define LINE_TERM "\r\n"
 
 typedef struct DB {
-    // Stores all IDs and rows.
+    // Stores all IDs and records.
     TTree data;
-    // The number of rows in the database.
-    size_t row_count;
+    // The number of records in the database.
+    size_t record_count;
     // The name of the DB's only table.
     char* table_name;
 } DB;
@@ -32,7 +32,7 @@ typedef struct DB {
 DB DB_create(void) {
     return (DB){
         .data = TTree_create(),
-        .row_count = 0,
+        .record_count = 0,
         .table_name = NULL,
     };
 }
@@ -44,7 +44,7 @@ void DB_destroy(DB* db) {
     }
 
     TTree_destroy(&db->data);
-    db->row_count = 0;
+    db->record_count = 0;
     free(db->table_name);
     db->table_name = NULL;
 }
@@ -77,7 +77,7 @@ typedef enum {
     DB_from_file__unordered_id = ERROR_UNORDERED_ID,
 } DB_from_file__Error;
 
-// Creates a new DB at `out_db` and inserts all rows from the file.
+// Creates a new DB at `out_db` and inserts all records from the file.
 // If there was an error, `out_db` is uninitialised.
 DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
     assert(fptr != NULL);
@@ -88,7 +88,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
     char* table_name = NULL;
     *out_db = (DB){
         .data = (TTree){.root = NULL, .node_allocator = NULL},
-        .row_count = 0,
+        .record_count = 0,
         .table_name = NULL,
     };
 
@@ -132,12 +132,12 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
         goto error_cleanup;
     }
 
-    // Parse rows
+    // Parse records
     ID last_id = 0;
-    size_t row_count = 0;
+    size_t record_count = 0;
     while (read_until_delim_or_eof(line, MAX_LINE_LEN, LINE_TERM, fptr)) {
         ID id;
-        Row row;
+        Record record;
         StringSplit split = {.current = line, .delim = ','};
         for (int i = 0; i < COLUMN_COUNT; i++) {
             switch (columns[i]) {
@@ -147,7 +147,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
                     err = DB_from_file__bad_format;
                     goto error_cleanup;
                 }
-                if (row_count > 0 && id <= last_id) {
+                if (record_count > 0 && id <= last_id) {
                     err = DB_from_file__unordered_id;
                     goto error_cleanup;
                 }
@@ -163,9 +163,9 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
                     goto error_cleanup;
                 }
                 if (columns[i] == COLUMN_NAME) {
-                    row.name = str;
+                    record.name = str;
                 } else if (columns[i] == COLUMN_PROGRAMME) {
-                    row.programme = str;
+                    record.programme = str;
                 } else {
                     UNREACHABLE;
                 }
@@ -175,7 +175,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
             }
             case COLUMN_MARK: {
                 char* float_str = string_split_next(&split);
-                if (!parse_float(float_str, &row.mark)) {
+                if (!parse_float(float_str, &record.mark)) {
                     err = DB_from_file__bad_format;
                     goto error_cleanup;
                 }
@@ -183,8 +183,8 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
             }
             }
         }
-        TTree_bulk_insert(&bulk, id, &row);
-        row_count++;
+        TTree_bulk_insert(&bulk, id, &record);
+        record_count++;
     }
     // Ensure the last line was properly terminated
     if (!str_empty(line)) {
@@ -194,7 +194,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
 
     *out_db = (DB){
         .data = TTree_bulk_insert_end(&bulk),
-        .row_count = row_count,
+        .record_count = record_count,
         .table_name = table_name,
     };
     return DB_from_file__ok;
@@ -227,21 +227,21 @@ bool DB_to_file(const DB* db, FILE* fptr) {
     // Iterate through all records
     TTreeIter it = TTree_iter_start(&db->data);
     ID id;
-    Row* row;
-    while (TTree_iter_next(&it, &id, &row)) {
+    Record* record;
+    while (TTree_iter_next(&it, &id, &record)) {
         if (fprintf(fptr, "%u,", id) < 0) {
             return false;
         }
-        if (!escape_string(fptr, row->name)) {
+        if (!escape_string(fptr, record->name)) {
             return false;
         }
         if (fputc(',', fptr) == EOF) {
             return false;
         }
-        if (!escape_string(fptr, row->programme)) {
+        if (!escape_string(fptr, record->programme)) {
             return false;
         }
-        if (fprintf(fptr, ",%.9g\r\n", row->mark) < 0) {
+        if (fprintf(fptr, ",%.9g\r\n", record->mark) < 0) {
             return false;
         }
     }

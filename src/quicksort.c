@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "row.c"
+#include "record.c"
 #include "tokenizer.c"
 
 // Comparator function for sorting integers in ascending/descending order.
@@ -45,24 +45,24 @@ static int __cmp_str(const char* lhs, const char* rhs, bool asc) {
 // and pass a pointer to the SortBy struct as the `udata` argument.
 // If sorting on the ID column, the `temp_id` members of all records must be
 // set to their respective IDs.
-int cmp_row(const void* l, const void* r, const void* udata) {
-    Row* const* lhs = l;
-    Row* const* rhs = r;
+int cmp_record(const void* l, const void* r, const void* udata) {
+    Record* const* lhs = l;
+    Record* const* rhs = r;
     const SortBy* sort_by = udata;
     switch (Column_type(sort_by->column)) {
     case VALUE_INT: {
-        uint32_t lhs_ui = Row_get_int(*lhs, sort_by->column);
-        uint32_t rhs_ui = Row_get_int(*rhs, sort_by->column);
+        uint32_t lhs_ui = Record_get_int(*lhs, sort_by->column);
+        uint32_t rhs_ui = Record_get_int(*rhs, sort_by->column);
         return __cmp_int(lhs_ui, rhs_ui, sort_by->ascending);
     }
     case VALUE_FLOAT: {
-        float lhs_f = Row_get_float(*lhs, sort_by->column);
-        float rhs_f = Row_get_float(*rhs, sort_by->column);
+        float lhs_f = Record_get_float(*lhs, sort_by->column);
+        float rhs_f = Record_get_float(*rhs, sort_by->column);
         return __cmp_float(lhs_f, rhs_f, sort_by->ascending);
     }
     case VALUE_STRING: {
-        char* lhs_s = Row_get_string(*lhs, sort_by->column);
-        char* rhs_s = Row_get_string(*rhs, sort_by->column);
+        char* lhs_s = Record_get_string(*lhs, sort_by->column);
+        char* rhs_s = Record_get_string(*rhs, sort_by->column);
         return __cmp_str(lhs_s, rhs_s, sort_by->ascending);
     }
     }

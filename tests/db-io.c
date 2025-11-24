@@ -92,36 +92,36 @@ TEST db_from_file_successful(void) {
     DB db;
     EXPECT_INT_EQUAL(ERROR_OK, DB_from_file(fptr, &db));
     EXPECT_STRING_EQUAL("abc", db.table_name);
-    EXPECT_INT_EQUAL(4, db.row_count);
+    EXPECT_INT_EQUAL(4, db.record_count);
 
     ID id;
-    Row* row;
+    Record* record;
     TTreeIter it = TTree_iter_start(&db.data);
-    EXPECT(TTree_iter_next(&it, &id, &row));
-    EXPECT_STRING_EQUAL("student a", row->name);
+    EXPECT(TTree_iter_next(&it, &id, &record));
+    EXPECT_STRING_EQUAL("student a", record->name);
     EXPECT_INT_EQUAL(0, id);
-    EXPECT_FLOAT_EQUAL((float)12.3, row->mark);
-    EXPECT_STRING_EQUAL("programme a", row->programme);
+    EXPECT_FLOAT_EQUAL((float)12.3, record->mark);
+    EXPECT_STRING_EQUAL("programme a", record->programme);
 
-    EXPECT(TTree_iter_next(&it, &id, &row));
-    EXPECT_STRING_EQUAL("student b", row->name);
+    EXPECT(TTree_iter_next(&it, &id, &record));
+    EXPECT_STRING_EQUAL("student b", record->name);
     EXPECT_INT_EQUAL(123, id);
-    EXPECT_FLOAT_EQUAL((float)4.56, row->mark);
-    EXPECT_STRING_EQUAL("programme a", row->programme);
+    EXPECT_FLOAT_EQUAL((float)4.56, record->mark);
+    EXPECT_STRING_EQUAL("programme a", record->programme);
 
-    EXPECT(TTree_iter_next(&it, &id, &row));
-    EXPECT_STRING_EQUAL("student c", row->name);
+    EXPECT(TTree_iter_next(&it, &id, &record));
+    EXPECT_STRING_EQUAL("student c", record->name);
     EXPECT_INT_EQUAL(321, id);
-    EXPECT_FLOAT_EQUAL((float)-2e22, row->mark);
-    EXPECT_STRING_EQUAL("math \"\"\\\\ \"escape me\"", row->programme);
+    EXPECT_FLOAT_EQUAL((float)-2e22, record->mark);
+    EXPECT_STRING_EQUAL("math \"\"\\\\ \"escape me\"", record->programme);
 
-    EXPECT(TTree_iter_next(&it, &id, &row));
-    EXPECT_STRING_EQUAL("student d", row->name);
+    EXPECT(TTree_iter_next(&it, &id, &record));
+    EXPECT_STRING_EQUAL("student d", record->name);
     EXPECT_INT_EQUAL(42069, id);
-    EXPECT_FLOAT_EQUAL((float)INFINITY, row->mark);
-    EXPECT_STRING_EQUAL("limits \\n calculus", row->programme);
+    EXPECT_FLOAT_EQUAL((float)INFINITY, record->mark);
+    EXPECT_STRING_EQUAL("limits \\n calculus", record->programme);
 
-    EXPECT(!TTree_iter_next(&it, &id, &row));
+    EXPECT(!TTree_iter_next(&it, &id, &record));
 
     DB_destroy(&db);
     fclose(fptr);
@@ -139,7 +139,7 @@ TEST db_from_file_empty(void) {
     DB db;
     EXPECT_INT_EQUAL(ERROR_OK, DB_from_file(fptr, &db));
     EXPECT_STRING_EQUAL("a", db.table_name);
-    EXPECT_INT_EQUAL(0, db.row_count);
+    EXPECT_INT_EQUAL(0, db.record_count);
 
     DB_destroy(&db);
     fclose(fptr);

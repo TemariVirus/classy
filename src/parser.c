@@ -6,7 +6,7 @@
 
 #include "condition.c"
 #include "error.c"
-#include "row.c"
+#include "record.c"
 #include "tokenizer.c"
 #include "unreachable.c"
 
@@ -44,39 +44,39 @@ typedef struct {
 } CmdSaveArgs;
 
 typedef struct {
-    // How to sort the rows.
+    // How to sort the records.
     SortBy sort_by;
 } CmdShowAllArgs;
 
 typedef struct {
-    // Condition to filter rows. If NULL, no filtering is applied.
+    // Condition to filter records. If NULL, no filtering is applied.
     Condition* filter;
 } CmdSummaryArgs;
 
 typedef struct {
-    // Condition to filter rows. Cannot be NULL.
+    // Condition to filter records. Cannot be NULL.
     Condition* filter;
     SortBy sort_by;
 } CmdQueryArgs;
 
 typedef struct {
-    // The row to insert.
-    Row row;
-    // The ID of the new row.
+    // The record to insert.
+    Record values;
+    // The ID of the new record.
     ID id;
 } CmdInsertArgs;
 
 typedef struct {
-    // The row with the updated values.
-    Row row;
-    // The ID of the row to update.
+    // The record with the updated values.
+    Record values;
+    // The ID of the record to update.
     ID id;
     // Columns that should be updated have their bit set to 1.
     ColumnsMask update_columns;
 } CmdUpdateArgs;
 
 typedef struct {
-    // The ID of the row to delete.
+    // The ID of the record to delete.
     ID id;
 } CmdDeleteArgs;
 
@@ -525,11 +525,11 @@ static parse_command__Error __parse_condition(Tokenizer* tokenizer, Condition** 
 }
 
 // Parses at most `n` column-value pairs of the form `Column=value`
-// from `tokenizer` into `out_id` and `out_row`.
+// from `tokenizer` into `out_id` and `out_record`.
 // A bitmask of the seen columns are written to `out_seen`.
 // It is an error for the same column to appear multiple times.
 static parse_command__Error __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id,
-                                                  Row* out_row, ColumnsMask* out_seen) {
+                                                  Record* out_record, ColumnsMask* out_seen) {
     *out_seen = COLUMNS_MASK_EMPTY;
     for (int i = 0; i < n; i++) {
         Token column_token = Tokenizer_next(tokenizer);
@@ -570,13 +570,13 @@ static parse_command__Error __parse_column_values(Tokenizer* tokenizer, int n, I
             *out_id = value.ui;
             break;
         case COLUMN_NAME:
-            out_row->name = value.s;
+            out_record->name = value.s;
             break;
         case COLUMN_PROGRAMME:
-            out_row->programme = value.s;
+            out_record->programme = value.s;
             break;
         case COLUMN_MARK:
-            out_row->mark = value.f;
+            out_record->mark = value.f;
             break;
         }
     }
@@ -625,7 +625,7 @@ static parse_command__Error __parse_show_summary(Tokenizer* tokenizer, CmdSummar
 static parse_command__Error __parse_insert(Tokenizer* tokenizer, CmdInsertArgs* out) {
     ColumnsMask seen_columns;
     parse_command__Error err =
-        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row, &seen_columns);
+        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->values, &seen_columns);
     if (err != parse_command__ok) {
         return err;
     }
@@ -662,7 +662,7 @@ static parse_command__Error __parse_query(Tokenizer* tokenizer, CmdQueryArgs* ou
 static parse_command__Error __parse_update(Tokenizer* tokenizer, CmdUpdateArgs* out) {
     ColumnsMask seen_columns;
     parse_command__Error err =
-        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row, &seen_columns);
+        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->values, &seen_columns);
     if (err != parse_command__ok) {
         return err;
     }

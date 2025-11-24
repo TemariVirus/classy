@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "row.c"
+#include "record.c"
 #include "tokenizer.c"
 #include "unreachable.c"
 
@@ -34,7 +34,7 @@ typedef union {
     } and_or;
 } ConditionArgs;
 
-// A condition used for filtering rows.
+// A condition used for filtering records.
 typedef struct Condition {
     ConditionArgs args;
     OpTag tag;
@@ -62,51 +62,57 @@ void Condition_destroy(Condition* cond) {
     }
 }
 
-// Returns whether the given ID and Row fulfill `cond`.
+// Returns whether the given ID and Record fulfill `cond`.
 // Returns true if `cond` is NULL.
-bool Condition_eval(const Condition* cond, ID id, Row* row) {
+bool Condition_eval(const Condition* cond, ID id, Record* record) {
     if (cond == NULL) {
         return true;
     }
 
-    row->temp_id = id; // Needed for `Row_get_int` to work
+    record->temp_id = id; // Needed for `Record_get_int` to work
     switch (cond->tag) {
     case OP_OR:
-        return Condition_eval(cond->args.and_or.lhs, id, row) ||
-               Condition_eval(cond->args.and_or.rhs, id, row);
+        return Condition_eval(cond->args.and_or.lhs, id, record) ||
+               Condition_eval(cond->args.and_or.rhs, id, record);
     case OP_AND:
-        return Condition_eval(cond->args.and_or.lhs, id, row) &&
-               Condition_eval(cond->args.and_or.rhs, id, row);
+        return Condition_eval(cond->args.and_or.lhs, id, record) &&
+               Condition_eval(cond->args.and_or.rhs, id, record);
     case OP_NOT:
-        return !Condition_eval(cond->args.not.cond, id, row);
+        return !Condition_eval(cond->args.not.cond, id, record);
     case OP_IN:
-        return strstr(Row_get_string(row, cond->args.in.column), cond->args.in.value) != NULL;
+        return strstr(Record_get_string(record, cond->args.in.column), cond->args.in.value) != NULL;
     case OP_LT:
         switch (Column_type(cond->args.eq_gt_lt.column)) {
         case VALUE_INT:
-            return Row_get_int(row, cond->args.eq_gt_lt.column) < cond->args.eq_gt_lt.value.ui;
+            return Record_get_int(record, cond->args.eq_gt_lt.column) <
+                   cond->args.eq_gt_lt.value.ui;
         case VALUE_FLOAT:
-            return Row_get_float(row, cond->args.eq_gt_lt.column) < cond->args.eq_gt_lt.value.f;
+            return Record_get_float(record, cond->args.eq_gt_lt.column) <
+                   cond->args.eq_gt_lt.value.f;
         case VALUE_STRING:
             UNREACHABLE;
         }
     case OP_GT:
         switch (Column_type(cond->args.eq_gt_lt.column)) {
         case VALUE_INT:
-            return Row_get_int(row, cond->args.eq_gt_lt.column) > cond->args.eq_gt_lt.value.ui;
+            return Record_get_int(record, cond->args.eq_gt_lt.column) >
+                   cond->args.eq_gt_lt.value.ui;
         case VALUE_FLOAT:
-            return Row_get_float(row, cond->args.eq_gt_lt.column) > cond->args.eq_gt_lt.value.f;
+            return Record_get_float(record, cond->args.eq_gt_lt.column) >
+                   cond->args.eq_gt_lt.value.f;
         case VALUE_STRING:
             UNREACHABLE;
         }
     case OP_EQ:
         switch (Column_type(cond->args.eq_gt_lt.column)) {
         case VALUE_INT:
-            return Row_get_int(row, cond->args.eq_gt_lt.column) == cond->args.eq_gt_lt.value.ui;
+            return Record_get_int(record, cond->args.eq_gt_lt.column) ==
+                   cond->args.eq_gt_lt.value.ui;
         case VALUE_FLOAT:
-            return Row_get_float(row, cond->args.eq_gt_lt.column) == cond->args.eq_gt_lt.value.f;
+            return Record_get_float(record, cond->args.eq_gt_lt.column) ==
+                   cond->args.eq_gt_lt.value.f;
         case VALUE_STRING:
-            return strcmp(Row_get_string(row, cond->args.eq_gt_lt.column),
+            return strcmp(Record_get_string(record, cond->args.eq_gt_lt.column),
                           cond->args.eq_gt_lt.value.s) == 0;
         }
     case OP_RPAREN:
