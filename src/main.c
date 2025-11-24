@@ -504,8 +504,55 @@ int main(void) {
 
         Command cmd;
         Tokenizer tokenizer = Tokenizer_create(line);
-        if (!parse_command(&tokenizer, &cmd)) {
-            fprintf(stdout, "Invalid command. For help on command syntax, run the HELP command.\n");
+        parse_command__Error parse_err = parse_command(&tokenizer, &cmd);
+        switch (parse_err) {
+        case ERROR_OK:
+            break;
+        case ERROR_EXPECTED_EOF:
+            fprintf(stdout, "ERROR: Unexpected input after command.\n");
+            break;
+        case ERROR_EXPECTED_COMMAND:
+            fprintf(stdout, "ERROR: Expected command keyword.\n");
+            break;
+        case ERROR_EXPECTED_VALUE:
+            fprintf(stdout, "ERROR: Expected value.\n");
+            break;
+        case ERROR_EXPECTED_INT:
+            fprintf(stdout, "ERROR: Expected integer.\n");
+            break;
+        case ERROR_EXPECTED_FLOAT:
+            fprintf(stdout, "ERROR: Expected float.\n");
+            break;
+        case ERROR_EXPECTED_STR:
+            fprintf(stdout, "ERROR: Expected string.\n");
+            break;
+        case ERROR_EXPECTED_COL:
+            fprintf(stdout, "ERROR: Expected column name.\n");
+            break;
+        case ERROR_EXPECTED_ID_COL:
+            fprintf(stdout, "ERROR: Expected ID column.\n");
+            break;
+        case ERROR_EXPECTED_STR_COL:
+            fprintf(stdout, "ERROR: Expected a string column.\n");
+            break;
+        case ERROR_EXPECTED_OP_EQ:
+            fprintf(stdout, "ERROR: Expected '='.\n");
+            break;
+        case ERROR_EXPECTED_COND:
+            fprintf(stdout, "ERROR: Expected condition.\n");
+            break;
+        case ERROR_DUPLICATE_COL:
+            fprintf(stdout, "ERROR: Duplicate column.\n");
+            break;
+        case ERROR_MISMATCHED_PAREN:
+            fprintf(stdout, "ERROR: Mismatched parenthesis.\n");
+            break;
+        case ERROR_BAD_OP:
+            fprintf(stdout, "ERROR: Illegal operator.\n");
+            break;
+        }
+        if (parse_err != parse_command__ok) {
+            fprintf(stdout, "For help on command syntax, run the HELP command.\n");
             continue;
         }
 

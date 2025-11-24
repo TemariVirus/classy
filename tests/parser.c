@@ -15,7 +15,7 @@ TEST parser_help(void) {
     {
         char line[] = "HELP";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_HELP, command.tag);
         Command_destroy(&command);
     }
@@ -23,7 +23,7 @@ TEST parser_help(void) {
     {
         char line[] = "HELP Name";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     END_TEST();
@@ -36,13 +36,13 @@ TEST parser_open(void) {
     {
         char line[] = "OPEN ";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(OPEN    "surrounded by 3 \\\"spaces.txt"   )";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_OPEN, command.tag);
         EXPECT_STRING_EQUAL(R"(   "surrounded by 3 \\\"spaces.txt"   )",
                             command.args.open.filename);
@@ -59,7 +59,7 @@ TEST parser_show_all(void) {
     {
         char line[] = "SHOW ALL";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_ALL, command.tag);
         EXPECT_INT_EQUAL(COLUMN_ID, command.args.show_all.sort_by.column);
         EXPECT(command.args.show_all.sort_by.ascending);
@@ -69,13 +69,13 @@ TEST parser_show_all(void) {
     {
         char line[] = "SHOW ALL SORT BY";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "SHOW ALL SORT BY Mark";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_ALL, command.tag);
         EXPECT_INT_EQUAL(COLUMN_MARK, command.args.show_all.sort_by.column);
         EXPECT(command.args.show_all.sort_by.ascending);
@@ -85,7 +85,7 @@ TEST parser_show_all(void) {
     {
         char line[] = "SHOW ALL SORT BY Name DESC";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_ALL, command.tag);
         EXPECT_INT_EQUAL(COLUMN_NAME, command.args.show_all.sort_by.column);
         EXPECT(!command.args.show_all.sort_by.ascending);
@@ -102,25 +102,25 @@ TEST parser_insert(void) {
     {
         char line[] = "INSERT";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95)";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95 Name="John Doe")";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95 Programme= "abc \\ xyz")";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_INSERT, command.tag);
         EXPECT_INT_EQUAL(123, command.args.insert.id);
         EXPECT_STRING_EQUAL("John Doe", command.args.insert.row.name);
@@ -132,7 +132,7 @@ TEST parser_insert(void) {
     {
         char line[] = "INSERT ID=abc Name=\"John Doe\" Mark=95 Programme=\"CS\" SORT BY Name";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     END_TEST();
@@ -145,37 +145,37 @@ TEST parser_query(void) {
     {
         char line[] = "QUERY";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "QUERY ID";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "QUERY ID=\"1\"";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "QUERY ID > 1.2";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "QUERY Name > \"Jane\"";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "QUERY ID=123";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_QUERY, command.tag);
 
         Condition* filter = command.args.query.filter;
@@ -193,7 +193,7 @@ TEST parser_query(void) {
         char line[] =
             "QUERY ID=1 OR NOT Mark > 1 AND Programme= \"abc\" OR \"xyz\" IN Name SORT BY Name ASC";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_QUERY, command.tag);
 
         // ... OR ...
@@ -236,7 +236,7 @@ TEST parser_query(void) {
     {
         char line[] = "QUERY (((((ID>1)OR ID<000))))";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_QUERY, command.tag);
 
         Condition* filter = command.args.query.filter;
@@ -259,7 +259,7 @@ TEST parser_query(void) {
     {
         char line[] = "QUERY SORT BY Name";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     END_TEST();
@@ -272,7 +272,7 @@ TEST parser_show_summary(void) {
     {
         char line[] = "SHOW SUMMARY";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_SUMMARY, command.tag);
         EXPECT(NULL == command.args.show_summary.filter);
         Command_destroy(&command);
@@ -281,19 +281,19 @@ TEST parser_show_summary(void) {
     {
         char line[] = "SHOW SUMMARY Mark=\"1\"";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "SHOW SUMMARY Mark>50.0 SORT BY ID";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "SHOW SUMMARY Programme = \"math\"";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_SUMMARY, command.tag);
         Condition* filter = command.args.show_summary.filter;
         EXPECT_INT_EQUAL(OP_EQ, filter->tag);
@@ -305,7 +305,7 @@ TEST parser_show_summary(void) {
     {
         char line[] = "SHOW SUMMARY NOT (ID>1000 OR (Programme=\"science\" OR ID = 42))";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SHOW_SUMMARY, command.tag);
         Condition* filter = command.args.show_summary.filter;
         EXPECT_INT_EQUAL(OP_NOT, filter->tag);
@@ -343,13 +343,13 @@ TEST parser_update(void) {
     {
         char line[] = "UPDATE";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95)";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
         EXPECT_INT_EQUAL(123, command.args.update.id);
         EXPECT_STRING_EQUAL("John Doe", command.args.update.row.name);
@@ -362,13 +362,13 @@ TEST parser_update(void) {
     {
         char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95 Name="John Doe")";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95 Programme= "abc \\ xyz")";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
         EXPECT_INT_EQUAL(123, command.args.update.id);
         EXPECT_STRING_EQUAL("John Doe", command.args.update.row.name);
@@ -389,31 +389,31 @@ TEST parser_delete(void) {
     {
         char line[] = "DELETE";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "DELETE ID";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "DELETE ID=\"3\"";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "DELETE Mark=10";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
         char line[] = "DELETE ID=3";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_DELETE, command.tag);
         EXPECT_INT_EQUAL(3, command.args.delete.id);
         Command_destroy(&command);
@@ -429,7 +429,7 @@ TEST parser_save(void) {
     {
         char line[] = "SAVE ";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SAVE, command.tag);
         EXPECT(NULL == command.args.save.filename);
         Command_destroy(&command);
@@ -438,7 +438,7 @@ TEST parser_save(void) {
     {
         char line[] = R"(SAVE    "surrounded by 3 \\\"spaces.txt"   )";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SAVE, command.tag);
         EXPECT_STRING_EQUAL(R"(   "surrounded by 3 \\\"spaces.txt"   )",
                             command.args.save.filename);
@@ -455,7 +455,7 @@ TEST parser_unknown(void) {
     {
         char line[] = "SHOW";
         Tokenizer tokenizer = Tokenizer_create(line);
-        EXPECT(!parse_command(&tokenizer, &command));
+        EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     END_TEST();

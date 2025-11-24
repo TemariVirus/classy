@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "condition.c"
+#include "error.c"
 #include "row.c"
 #include "tokenizer.c"
 #include "unreachable.c"
@@ -94,7 +95,25 @@ typedef struct {
     CommandTag tag;
 } Command;
 
-static bool __parse_expression(Tokenizer*, uint8_t, Expression*);
+typedef enum {
+    parse_command__ok = ERROR_OK,
+    parse_command__expected_eof = ERROR_EXPECTED_EOF,
+    parse_command__expected_command = ERROR_EXPECTED_COMMAND,
+    parse_command__expected_value = ERROR_EXPECTED_VALUE,
+    parse_command__expected_int = ERROR_EXPECTED_INT,
+    parse_command__expected_float = ERROR_EXPECTED_FLOAT,
+    parse_command__expected_str = ERROR_EXPECTED_STR,
+    parse_command__expected_col = ERROR_EXPECTED_COL,
+    parse_command__expected_id_col = ERROR_EXPECTED_ID_COL,
+    parse_command__expected_str_col = ERROR_EXPECTED_STR_COL,
+    parse_command__expected_op_eq = ERROR_EXPECTED_OP_EQ,
+    parse_command__expected_cond = ERROR_EXPECTED_COND,
+    parse_command__duplicate_col = ERROR_DUPLICATE_COL,
+    parse_command__mismatched_paren = ERROR_MISMATCHED_PAREN,
+    parse_command__bad_op = ERROR_BAD_OP,
+} parse_command__Error;
+
+static parse_command__Error __parse_expression(Tokenizer*, uint8_t, Expression*);
 
 // Writes the right binding power of a prefix operator to `rbp`.
 // Returns whether `op` is a valid prefix operator.
@@ -168,36 +187,35 @@ static bool __op_supports_lhs(OpTag op, Expression lhs) {
 
 // Attempts to coerce `rhs` into a value suitable for comparison with `lhs_column`.
 // Writes the coerced value to `out_value`.
-// Returns whether the coercion was successful.
-static bool __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
-                                    union EqGtLtValue* out_value) {
+static parse_command__Error __coerce_eq_gt_lt_value(Column lhs_column, Expression rhs,
+                                                    union EqGtLtValue* out_value) {
     switch (Column_type(lhs_column)) {
     case VALUE_INT:
         switch (rhs.tag) {
         case EXPR_INT:
             out_value->ui = rhs.value.ui;
-            return true;
+            return parse_command__ok;
         default:
-            return false;
+            return parse_command__expected_int;
         }
     case VALUE_FLOAT:
         switch (rhs.tag) {
         case EXPR_INT:
             out_value->f = rhs.value.ui;
-            return true;
+            return parse_command__ok;
         case EXPR_FLOAT:
             out_value->f = rhs.value.f;
-            return true;
+            return parse_command__ok;
         default:
-            return false;
+            return parse_command__expected_float;
         }
     case VALUE_STRING:
         switch (rhs.tag) {
         case EXPR_STRING:
             out_value->s = rhs.value.s;
-            return true;
+            return parse_command__ok;
         default:
-            return false;
+            return parse_command__expected_str;
         }
     }
 }
@@ -264,28 +282,27 @@ static Expression __expression_from_token(Token token) {
 
 // Create a condition at `out_expr` with the prefix operator `op`,
 // right binding power `rbp`, and operand parsed from `tokenizer`.
-// Returns whether the condition was successfully created.
-static bool __prefixed_condition(OpTag op, uint8_t rbp, Tokenizer* tokenizer,
-                                 Expression* out_expr) {
+static parse_command__Error __prefixed_condition(OpTag op, uint8_t rbp, Tokenizer* tokenizer,
+                                                 Expression* out_expr) {
+    parse_command__Error err;
     Condition* cond = NULL;
     Expression rhs;
     bool also_free_rhs = false;
 
     // Get operand
-    if (!__parse_expression(tokenizer, rbp, &rhs)) {
+    err = __parse_expression(tokenizer, rbp, &rhs);
+    if (err != parse_command__ok) {
         goto error_cleanup;
     }
     also_free_rhs = true;
 
     // Construct condition with prefix operator
     cond = malloc(sizeof(Condition));
-    if (cond == NULL) {
-        goto error_cleanup;
-    }
     cond->tag = op;
     switch (op) {
     case OP_NOT:
         if (rhs.tag != EXPR_CONDITION) {
+            err = parse_command__expected_cond;
             goto error_cleanup;
         }
         cond->args.not.cond = rhs.value.cond;
@@ -300,55 +317,57 @@ static bool __prefixed_condition(OpTag op, uint8_t rbp, Tokenizer* tokenizer,
         .tag = EXPR_CONDITION,
         .value.cond = cond,
     };
-    return true;
+    return parse_command__ok;
 
 error_cleanup:
     free(cond);
     if (also_free_rhs) {
         __expression_destroy(&rhs);
     }
-    return false;
+    return err;
 }
 
 // Create a condition at `out_expr` with the left operand `lhs`, infix operator `op`,
 // right binding power `rbp`, and right operand parsed from `tokenizer`.
-// Returns whether the condition was successfully created.
-static bool __infixed_condition(Expression lhs, OpTag op, uint8_t rbp, Tokenizer* tokenizer,
-                                Expression* out_expr) {
+static parse_command__Error __infixed_condition(Expression lhs, OpTag op, uint8_t rbp,
+                                                Tokenizer* tokenizer, Expression* out_expr) {
+    parse_command__Error err;
     Condition* cond = NULL;
     Expression rhs;
     bool also_free_rhs = false;
 
     // Get second operand (lhs is the first operand)
-    if (!__parse_expression(tokenizer, rbp, &rhs)) {
+    err = __parse_expression(tokenizer, rbp, &rhs);
+    if (err != parse_command__ok) {
         goto error_cleanup;
     }
     also_free_rhs = true;
 
     // Construct condition with infix operator
     cond = malloc(sizeof(Condition));
-    if (cond == NULL) {
-        goto error_cleanup;
-    }
     cond->tag = op;
     switch (op) {
     case OP_EQ:
     case OP_GT:
     case OP_LT:
         if (lhs.tag != EXPR_COLUMN) {
+            err = parse_command__expected_col;
             goto error_cleanup;
         }
         cond->args.eq_gt_lt.column = lhs.value.column;
-        if (!__coerce_eq_gt_lt_value(lhs.value.column, rhs, &cond->args.eq_gt_lt.value)) {
+        err = __coerce_eq_gt_lt_value(lhs.value.column, rhs, &cond->args.eq_gt_lt.value);
+        if (err != parse_command__ok) {
             goto error_cleanup;
         }
         break;
     case OP_IN:
         if (rhs.tag != EXPR_COLUMN || Column_type(rhs.value.column) != VALUE_STRING) {
+            err = parse_command__expected_str_col;
             goto error_cleanup;
         }
         cond->args.in.column = rhs.value.column;
         if (lhs.tag != EXPR_STRING) {
+            err = parse_command__expected_str;
             goto error_cleanup;
         }
         cond->args.in.value = lhs.value.s;
@@ -356,11 +375,13 @@ static bool __infixed_condition(Expression lhs, OpTag op, uint8_t rbp, Tokenizer
     case OP_AND:
     case OP_OR:
         if (rhs.tag != EXPR_CONDITION) {
+            err = parse_command__expected_cond;
             goto error_cleanup;
         }
         cond->args.and_or.rhs = rhs.value.cond;
         also_free_rhs = false;
         if (lhs.tag != EXPR_CONDITION) {
+            err = parse_command__expected_cond;
             goto error_cleanup;
         }
         cond->args.and_or.lhs = lhs.value.cond;
@@ -374,23 +395,24 @@ static bool __infixed_condition(Expression lhs, OpTag op, uint8_t rbp, Tokenizer
         .tag = EXPR_CONDITION,
         .value.cond = cond,
     };
-    return true;
+    return parse_command__ok;
 
 error_cleanup:
     free(cond);
     if (also_free_rhs) {
         __expression_destroy(&rhs);
     }
-    return false;
+    return err;
 }
 
 // Pratt parser for expressions.
 // Parses an expression into `out_expr` from `tokenizer` until the next operator
 // with left binding power less than `min_bp` is encountered.
-// Returns whether an expression was successfully parsed.
 //
 // See: https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
-static bool __parse_expression(Tokenizer* tokenizer, uint8_t min_bp, Expression* out_expr) {
+static parse_command__Error __parse_expression(Tokenizer* tokenizer, uint8_t min_bp,
+                                               Expression* out_expr) {
+    parse_command__Error err;
     Expression lhs;
 
     // Initialise lhs
@@ -401,7 +423,7 @@ static bool __parse_expression(Tokenizer* tokenizer, uint8_t min_bp, Expression*
     case TOKEN_CMD:
     case TOKEN_SORT_BY:
         // These tokens cannot be part of an expression
-        return false;
+        return parse_command__expected_value;
     case TOKEN_COLUMN:
     case TOKEN_STRING:
     case TOKEN_INT:
@@ -412,12 +434,14 @@ static bool __parse_expression(Tokenizer* tokenizer, uint8_t min_bp, Expression*
         switch (token.data.op) {
         case OP_LPAREN:
             // Expression wrapped in parenthesis
-            if (!__parse_expression(tokenizer, 0, &lhs)) {
-                return false;
+            err = __parse_expression(tokenizer, 0, &lhs);
+            if (err != parse_command__ok) {
+                goto error_cleanup;
             }
             // Must be closed by right parenthesis
             Token next = Tokenizer_next(tokenizer);
             if (next.tag != TOKEN_OP || next.data.op != OP_RPAREN) {
+                err = parse_command__mismatched_paren;
                 goto error_cleanup;
             }
             break;
@@ -426,10 +450,11 @@ static bool __parse_expression(Tokenizer* tokenizer, uint8_t min_bp, Expression*
             uint8_t rbp;
             if (!__prefix_binding_power(token.data.op, &rbp)) {
                 // Operation cannot be used as prefix
-                return false;
+                return parse_command__bad_op;
             }
-            if (!__prefixed_condition(token.data.op, rbp, tokenizer, &lhs)) {
-                return false;
+            err = __prefixed_condition(token.data.op, rbp, tokenizer, &lhs);
+            if (err != parse_command__ok) {
+                goto error_cleanup;
             }
             break;
         }
@@ -457,58 +482,62 @@ static bool __parse_expression(Tokenizer* tokenizer, uint8_t min_bp, Expression*
             break;
         }
         (void)Tokenizer_next(tokenizer); // Discard operator token
-        if (!__infixed_condition(lhs, op_token.data.op, rbp, tokenizer, &lhs)) {
+        err = __infixed_condition(lhs, op_token.data.op, rbp, tokenizer, &lhs);
+        if (err != parse_command__ok) {
             goto error_cleanup;
         }
     }
 
     *out_expr = lhs;
-    return true;
+    return parse_command__ok;
 
 error_cleanup:
     __expression_destroy(&lhs);
-    return false;
+    return err;
 }
 
 // Consumes tokens from `tokenizer` to parse a condition.
-// Returns the parsed condition, or NULL on error.
+// On success, writes the parsed condition to `out_cond`.
 //
-// The returned condition must be freed with `Condition_destroy`.
-static Condition* __parse_condition(Tokenizer* tokenizer) {
+// The condition must be freed with `Condition_destroy`.
+static parse_command__Error __parse_condition(Tokenizer* tokenizer, Condition** out_cond) {
     Expression expr;
-    if (!__parse_expression(tokenizer, 0, &expr)) {
-        return NULL;
+    parse_command__Error err = __parse_expression(tokenizer, 0, &expr);
+    if (err != parse_command__ok) {
+        return err;
     }
     switch (expr.tag) {
     case EXPR_CONDITION:
-        return expr.value.cond;
+        *out_cond = expr.value.cond;
+        return parse_command__ok;
     default:
-        return NULL;
+        return parse_command__expected_cond;
     }
 }
 
 // Parses at most `n` column-value pairs of the form `Column=value`
 // from `tokenizer` into `out_id` and `out_row`.
+// A bitmask of the seen columns are written to `out_seen`.
 // It is an error for the same column to appear multiple times.
-// Returns a bitmask of the seen columns, or COLUMNS_MASK_EMPTY on error.
-static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id, Row* out_row) {
-    ColumnsMask seen_columns = COLUMNS_MASK_EMPTY;
+static parse_command__Error __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id,
+                                                  Row* out_row, ColumnsMask* out_seen) {
+    *out_seen = COLUMNS_MASK_EMPTY;
     for (int i = 0; i < n; i++) {
         Token column_token = Tokenizer_next(tokenizer);
         if (column_token.tag != TOKEN_COLUMN) {
             break;
         }
         Column column = column_token.data.col;
-        if (ColumnsMask_get(&seen_columns, column)) {
+        if (ColumnsMask_get(out_seen, column)) {
             // Column specified multiple times
-            return COLUMNS_MASK_EMPTY;
+            return parse_command__duplicate_col;
         }
-        ColumnsMask_set(&seen_columns, column);
+        ColumnsMask_set(out_seen, column);
 
         // '=' must separate column and value
         Token eq_token = Tokenizer_next(tokenizer);
         if (eq_token.tag != TOKEN_OP || eq_token.data.op != OP_EQ) {
-            return COLUMNS_MASK_EMPTY;
+            return parse_command__expected_op_eq;
         }
 
         Token value_token = Tokenizer_next(tokenizer);
@@ -518,12 +547,14 @@ static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id
         case TOKEN_FLOAT:
             break;
         default:
-            return COLUMNS_MASK_EMPTY;
+            return parse_command__expected_value;
         }
 
         union EqGtLtValue value;
-        if (!__coerce_eq_gt_lt_value(column, __expression_from_token(value_token), &value)) {
-            return COLUMNS_MASK_EMPTY;
+        parse_command__Error err =
+            __coerce_eq_gt_lt_value(column, __expression_from_token(value_token), &value);
+        if (err != parse_command__ok) {
+            return err;
         }
         switch (column) {
         case COLUMN_ID:
@@ -540,64 +571,67 @@ static ColumnsMask __parse_column_values(Tokenizer* tokenizer, int n, ID* out_id
             break;
         }
     }
-    return seen_columns;
+    return parse_command__ok;
 }
 
 // Parses the arguments for the OPEN command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_open(Tokenizer* tokenizer, CmdOpenArgs* out) {
+static parse_command__Error __parse_open(Tokenizer* tokenizer, CmdOpenArgs* out) {
     Token filename_token = Tokenizer_next(tokenizer);
     if (filename_token.tag != TOKEN_STRING) {
-        return false;
+        return parse_command__expected_str;
     }
     assert(filename_token.data.s != NULL);
     out->filename = filename_token.data.s;
-    return true;
+    return parse_command__ok;
 }
 
 // Parses the arguments for the SHOW ALL command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_show_all(Tokenizer* tokenizer, CmdShowAllArgs* out) {
+static parse_command__Error __parse_show_all(Tokenizer* tokenizer, CmdShowAllArgs* out) {
     Token sort_by_token = Tokenizer_next(tokenizer);
     switch (sort_by_token.tag) {
     case TOKEN_EOF:
         // No sort by specified, use default
         out->sort_by = DEFAULT_SORT_BY;
-        return true;
+        return parse_command__ok;
     case TOKEN_SORT_BY:
         out->sort_by = sort_by_token.data.sort_by;
-        return true;
+        return parse_command__ok;
     default:
         break;
     }
-    return false;
+    return parse_command__expected_eof;
 }
 
 // Parses the arguments for the SHOW SUMMARY command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_show_summary(Tokenizer* tokenizer, CmdSummaryArgs* out) {
+static parse_command__Error __parse_show_summary(Tokenizer* tokenizer, CmdSummaryArgs* out) {
     if (Tokenizer_peek(tokenizer).tag == TOKEN_EOF) {
         // No condition specified
         out->filter = NULL;
-        return true;
+        return parse_command__ok;
     }
-    out->filter = __parse_condition(tokenizer);
-    return out->filter != NULL;
+    return __parse_condition(tokenizer, &out->filter);
 }
 
 // Parses the arguments for the INSERT command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_insert(Tokenizer* tokenizer, CmdInsertArgs* out) {
-    ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
-    return seen_columns == COLUMNS_MASK_FULL;
+static parse_command__Error __parse_insert(Tokenizer* tokenizer, CmdInsertArgs* out) {
+    ColumnsMask seen_columns;
+    parse_command__Error err =
+        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row, &seen_columns);
+    if (err != parse_command__ok) {
+        return err;
+    }
+    // All columns are required
+    if (seen_columns != COLUMNS_MASK_FULL) {
+        return parse_command__expected_col;
+    }
+    return parse_command__ok;
 }
 
 // Parses the arguments for the QUERY command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_query(Tokenizer* tokenizer, CmdQueryArgs* out) {
-    out->filter = __parse_condition(tokenizer);
-    if (out->filter == NULL) {
-        return false;
+static parse_command__Error __parse_query(Tokenizer* tokenizer, CmdQueryArgs* out) {
+    parse_command__Error err = __parse_condition(tokenizer, &out->filter);
+    if (err != parse_command__ok) {
+        return err;
     }
 
     Token sort_by_token = Tokenizer_next(tokenizer);
@@ -605,117 +639,128 @@ static bool __parse_query(Tokenizer* tokenizer, CmdQueryArgs* out) {
     case TOKEN_EOF:
         // No sort by specified, use default
         out->sort_by = DEFAULT_SORT_BY;
-        return true;
+        return parse_command__ok;
     case TOKEN_SORT_BY:
         out->sort_by = sort_by_token.data.sort_by;
-        return true;
+        return parse_command__ok;
     default:
         break;
     }
-    return false;
+    return parse_command__expected_eof;
 }
 
 // Parses the arguments for the UPDATE command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_update(Tokenizer* tokenizer, CmdUpdateArgs* out) {
-    ColumnsMask seen_columns = __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row);
+static parse_command__Error __parse_update(Tokenizer* tokenizer, CmdUpdateArgs* out) {
+    ColumnsMask seen_columns;
+    parse_command__Error err =
+        __parse_column_values(tokenizer, COLUMN_COUNT, &out->id, &out->row, &seen_columns);
+    if (err != parse_command__ok) {
+        return err;
+    }
+
     // ID column is required
     if (!ColumnsMask_get(&seen_columns, COLUMN_ID)) {
-        return false;
+        return parse_command__expected_id_col;
     }
     // Set all seen columns except ID
     ColumnsMask_unset(&seen_columns, COLUMN_ID);
     out->update_columns = seen_columns;
     // At least one column must be updated
-    return out->update_columns != COLUMNS_MASK_EMPTY;
+    if (out->update_columns == COLUMNS_MASK_EMPTY) {
+        return parse_command__expected_col;
+    }
+    return parse_command__ok;
 }
 
 // Parses the arguments for the DELETE command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_delete(Tokenizer* tokenizer, CmdDeleteArgs* out) {
+static parse_command__Error __parse_delete(Tokenizer* tokenizer, CmdDeleteArgs* out) {
     Token id_col_token = Tokenizer_next(tokenizer);
     if (id_col_token.tag != TOKEN_COLUMN || id_col_token.data.col != COLUMN_ID) {
-        return false;
+        return parse_command__expected_id_col;
     }
     Token eq_token = Tokenizer_next(tokenizer);
     if (eq_token.tag != TOKEN_OP || eq_token.data.op != OP_EQ) {
-        return false;
+        return parse_command__expected_op_eq;
     }
     Token id_val_token = Tokenizer_next(tokenizer);
     if (id_val_token.tag != TOKEN_INT) {
-        return false;
+        return parse_command__expected_int;
     }
     out->id = id_val_token.data.ui;
-    return true;
+    return parse_command__ok;
 }
 
 // Parses the arguments for the SAVE command from `tokenizer` into `out`.
-// Returns whether parsing was successful.
-static bool __parse_save(Tokenizer* tokenizer, CmdSaveArgs* out) {
+static parse_command__Error __parse_save(Tokenizer* tokenizer, CmdSaveArgs* out) {
     Token filename_token = Tokenizer_next(tokenizer);
     switch (filename_token.tag) {
     case TOKEN_EOF:
         // No filename specified
         out->filename = NULL;
-        return true;
+        return parse_command__ok;
     case TOKEN_STRING:
         assert(filename_token.data.s != NULL);
         out->filename = filename_token.data.s;
-        return true;
+        return parse_command__ok;
     default:
         break;
     }
-    return false;
+    return parse_command__expected_str;
 }
 
 // Consumes all tokens from `tokenizer` to parse a command.
-// The parsed command is written to `out`.
-// Returns whether parsing was successful. Parsing is unsuccessful if there are
-// any tokens remaining after the command is parsed.
+// If parsing is successful, the parsed command is written to `out`.
+// Parsing is unsuccessful if there are any tokens remaining after the command is parsed.
 //
 // The returned command must be freed with `Command_destroy`.
-bool parse_command(Tokenizer* tokenizer, Command* out) {
-    bool success;
+parse_command__Error parse_command(Tokenizer* tokenizer, Command* out) {
     Token cmd_token = Tokenizer_next(tokenizer);
     if (cmd_token.tag != TOKEN_CMD) {
-        return false;
+        return parse_command__expected_command;
     }
 
+    parse_command__Error err;
     out->tag = cmd_token.data.cmd;
     switch (cmd_token.data.cmd) {
     case CMD_HELP:
-        success = true;
+        err = parse_command__ok;
         break;
     case CMD_OPEN:
-        success = __parse_open(tokenizer, &out->args.open);
+        err = __parse_open(tokenizer, &out->args.open);
         break;
     case CMD_SHOW_ALL:
-        success = __parse_show_all(tokenizer, &out->args.show_all);
+        err = __parse_show_all(tokenizer, &out->args.show_all);
         break;
     case CMD_SHOW_SUMMARY:
-        success = __parse_show_summary(tokenizer, &out->args.show_summary);
+        out->args.show_summary.filter = NULL;
+        err = __parse_show_summary(tokenizer, &out->args.show_summary);
         break;
     case CMD_INSERT:
-        success = __parse_insert(tokenizer, &out->args.insert);
+        err = __parse_insert(tokenizer, &out->args.insert);
         break;
     case CMD_QUERY:
-        success = __parse_query(tokenizer, &out->args.query);
+        out->args.query.filter = NULL;
+        err = __parse_query(tokenizer, &out->args.query);
         break;
     case CMD_UPDATE:
-        success = __parse_update(tokenizer, &out->args.update);
+        err = __parse_update(tokenizer, &out->args.update);
         break;
     case CMD_DELETE:
-        success = __parse_delete(tokenizer, &out->args.delete);
+        err = __parse_delete(tokenizer, &out->args.delete);
         break;
     case CMD_SAVE:
-        success = __parse_save(tokenizer, &out->args.save);
+        err = __parse_save(tokenizer, &out->args.save);
         break;
+    }
+    if (err != parse_command__ok) {
+        Command_destroy(out);
+        return err;
     }
 
     Token eof_token = Tokenizer_next(tokenizer);
-    if (!success || eof_token.tag != TOKEN_EOF) {
+    if (eof_token.tag != TOKEN_EOF) {
         Command_destroy(out);
-        return false;
+        return parse_command__expected_eof;
     }
-    return true;
+    return parse_command__ok;
 }
