@@ -489,17 +489,17 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
 // Returns whether the operation was successful.
 bool run_save(const DB* db, const CmdSaveArgs* args) {
     // Binary mode needed for cross-platform line endings
-    AtomicFile* f = AtomicFile_open("wb");
-    if (f == NULL) {
+    AtomicFile* file = AtomicFile_open("wb");
+    if (file == NULL) {
         fprintf(stdout, "ERROR: Could not open file for safe writing.\n");
         goto error_cleanup;
     }
 
-    if (!DB_to_file(db, f->fptr)) {
+    if (!DB_to_file(db, file->fptr)) {
         fprintf(stdout, "ERROR: Failed to serialize the table \"%s\"\n", db->table_name);
         goto error_cleanup;
     }
-    if (!AtomicFile_close(f, args->filename)) {
+    if (!AtomicFile_close(file, args->filename)) {
         fprintf(stdout, "ERROR: Could not save to the file \"%s\".\n", args->filename);
         goto error_cleanup;
     }
@@ -508,7 +508,7 @@ bool run_save(const DB* db, const CmdSaveArgs* args) {
     return true;
 
 error_cleanup:
-    AtomicFile_delete(f);
+    AtomicFile_delete(file);
     return false;
 }
 

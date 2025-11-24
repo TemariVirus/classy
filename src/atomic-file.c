@@ -36,7 +36,7 @@ AtomicFile* AtomicFile_open(const char* mode) {
         goto error_cleanup;
     }
     // Get temp file name and create the file
-    if (GetTempFileNameA(temp_path, "TMP", 0, file->temp_filename) == 0) {
+    if (GetTempFileNameA(temp_path, "classy", 0, file->temp_filename) == 0) {
         goto error_cleanup;
     }
     // Open the temp file
@@ -92,7 +92,12 @@ bool AtomicFile_close(AtomicFile* file, const char* filename) {
 
     fclose(file->fptr);
 #if defined(_WIN32)
-    if (ReplaceFile(filename, file->temp_filename, NULL,
+    // MoveFile fails if `filename` already exists,
+    // while ReplaceFile fails if `filename` does not yet exist.
+    // We need to try both to get the overwrite-or-create behaviour of rename().
+    // Sigh, Windows...
+    if (MoveFile(file->temp_filename, filename) == 0 &&
+        ReplaceFile(filename, file->temp_filename, NULL,
                     REPLACEFILE_IGNORE_MERGE_ERRORS | REPLACEFILE_WRITE_THROUGH, NULL, NULL) == 0) {
         return false;
     }
