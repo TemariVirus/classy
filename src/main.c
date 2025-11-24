@@ -594,7 +594,7 @@ int main(void) {
             fprintf(stdout, "ERROR: Out of memory.\n");
             continue;
         }
-        if (parse_err != parse_command__ok) {
+        if (parse_err != ERROR_OK) {
             fprintf(stdout, "For help on command syntax, run the HELP command.\n");
             continue;
         }
