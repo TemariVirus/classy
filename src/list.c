@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "panic.c"
+
 #ifndef TYPED
 #define TYPED(THING) THING
 #endif
@@ -61,6 +63,9 @@ void TYPED(List_ensure_capacity)(TYPED(List) * self, size_t new_capacity) {
     }
     if (capacity > self->capacity) {
         self->items = realloc(self->items, capacity * sizeof(TYPE));
+        if (self->items == NULL) {
+            PANIC("Out of memory.");
+        }
         self->capacity = capacity;
     }
 }

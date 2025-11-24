@@ -96,6 +96,9 @@ static int __max2(int a, int b) { return a > b ? a : b; }
 // The same allocator passed into this function must be used to free the node.
 static TTreeNode* __ttree_node_create(TTreeNodeAllocator* allocator) {
     TTreeNode* node = TTreeNodeAllocator_alloc(allocator);
+    if (node == NULL) {
+        PANIC("Out of memory.");
+    }
     node->left = NULL;
     node->right = NULL;
     node->length = 0;
@@ -512,6 +515,9 @@ Row* TTree_get(const TTree* tree, ID id) {
 bool TTree_insert(TTree* tree, ID id, const Row* row) {
     if (tree->node_allocator == NULL) {
         tree->node_allocator = TTreeNodeAllocator_create();
+        if (tree->node_allocator == NULL) {
+            PANIC("Out of memory.");
+        }
     }
     if (tree->root == NULL) {
         tree->root = __ttree_node_create(tree->node_allocator);
@@ -840,6 +846,9 @@ static void __bulk_insert_finish_node(TTreeNode* node, TTree* tree) {
 void TTree_bulk_insert(TTreeBulkInsert* bulk, ID id, Row* row) {
     if (bulk->tree.node_allocator == NULL) {
         bulk->tree.node_allocator = TTreeNodeAllocator_create();
+        if (bulk->tree.node_allocator == NULL) {
+            PANIC("Out of memory.");
+        }
     }
     if (bulk->current == NULL) {
         bulk->current = __ttree_node_create(bulk->tree.node_allocator);

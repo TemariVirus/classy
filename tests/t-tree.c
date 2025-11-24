@@ -264,6 +264,7 @@ TEST ttree_rebalance(void) {
 
     TTree tree = TTree_create();
     tree.node_allocator = TTreeNodeAllocator_create();
+    EXPECT(tree.node_allocator != NULL);
 
     tree.root = create_fake_node(tree.node_allocator, 4);
     tree.root->left = create_fake_node(tree.node_allocator, 3);

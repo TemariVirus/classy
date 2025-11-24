@@ -64,9 +64,12 @@ static void __aligned_free(void* ptr) {
 #endif
 }
 
-// Create a new chunked allocator.
+// Returns a new chunked allocator, or NULL on failure.
 Allocator* TYPED(Allocator_create)(void) {
     Allocator* allocator = malloc(sizeof(Allocator));
+    if (allocator == NULL) {
+        return NULL;
+    }
     *allocator = (Allocator){
         .free_chunks = NULL,
         .full_chunks = NULL,

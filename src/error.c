@@ -35,3 +35,4 @@ typedef int ClassyError;
 #define ERROR_DUPLICATE_COL 1017
 #define ERROR_MISMATCHED_PAREN 1018
 #define ERROR_BAD_OP 1019
+#define ERROR_OUT_OF_MEM 1020

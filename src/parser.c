@@ -111,6 +111,7 @@ typedef enum {
     parse_command__duplicate_col = ERROR_DUPLICATE_COL,
     parse_command__mismatched_paren = ERROR_MISMATCHED_PAREN,
     parse_command__bad_op = ERROR_BAD_OP,
+    parse_command__out_of_mem = ERROR_OUT_OF_MEM,
 } parse_command__Error;
 
 static parse_command__Error __parse_expression(Tokenizer*, uint8_t, Expression*);
@@ -298,6 +299,10 @@ static parse_command__Error __prefixed_condition(OpTag op, uint8_t rbp, Tokenize
 
     // Construct condition with prefix operator
     cond = malloc(sizeof(Condition));
+    if (cond == NULL) {
+        err = parse_command__out_of_mem;
+        goto error_cleanup;
+    }
     cond->tag = op;
     switch (op) {
     case OP_NOT:
@@ -345,6 +350,10 @@ static parse_command__Error __infixed_condition(Expression lhs, OpTag op, uint8_
 
     // Construct condition with infix operator
     cond = malloc(sizeof(Condition));
+    if (cond == NULL) {
+        err = parse_command__out_of_mem;
+        goto error_cleanup;
+    }
     cond->tag = op;
     switch (op) {
     case OP_EQ:

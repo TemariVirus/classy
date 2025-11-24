@@ -550,6 +550,9 @@ int main(void) {
         case ERROR_BAD_OP:
             fprintf(stdout, "ERROR: Illegal operator.\n");
             break;
+        case ERROR_OUT_OF_MEM:
+            fprintf(stdout, "ERROR: Out of memory.\n");
+            continue;
         }
         if (parse_err != parse_command__ok) {
             fprintf(stdout, "For help on command syntax, run the HELP command.\n");
