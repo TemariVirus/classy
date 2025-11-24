@@ -4,7 +4,8 @@ A classy class management system
 
 ## Command Syntax
 
-All commands are case-sensitive. All commands are terminated by a newline character. Including the newline character, commands cannot exceed 4095 characters in length.
+Commands are single-line and cannot exceed 4094 characters in length.
+All commands are case-sensitive.
 
 ### HELP
 
@@ -67,15 +68,17 @@ If the sort order is not specified, it defaults to `ASC`.
 
 `condition` may be composed of the following operations (ordered by highest to lowest precedence):
 
-- integer, float, and string equality (column = val)
-- integer and float greater than (column > val)
-- integer and float less than (column < val)
-- string contains (val IN column)
-- boolean not (NOT expr)
-- boolean and (expr AND expr)
-- boolean or (expr OR expr)
+- integer, float, and string equality (`column` = `val`)
+- integer and float greater than (`column` > `val`)
+- integer and float less than (`column` < `val`)
+- string contains (`val` IN `column`)
+- boolean not (NOT `expr`)
+- boolean and (`expr` AND `expr`)
+- boolean or (`expr` OR `expr`)
 
-Parentheses may be used to group sub-conditions. If necessary, integers will be automatically converted to floats. Whitespace around the =, >, and < operators is ignored.
+Parentheses may be used to group sub-conditions.
+If necessary, integers will be automatically converted to floats.
+Whitespace around the =, >, and < operators is ignored.
 
 Examples:
 
