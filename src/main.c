@@ -249,7 +249,10 @@ bool run_open(DB* db, const CmdOpenArgs* args) {
 // Runs the SHOW ALL command.
 void run_show_all(const DB* db, const CmdShowAllArgs* args) {
     if (db->record_count == 0) {
-        fprintf(stdout, "There are no records in the table \"%s\".\n", db->table_name);
+        fprintf(stdout,
+                "There are no records in the table \"%s\". Run the INSERT command to insert new "
+                "records.\n",
+                db->table_name);
         return;
     }
 
@@ -338,7 +341,10 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
 
     // There is no summary to print if no records mathced
     if (record_count == 0) {
-        fprintf(stdout, "No records matched. Run the INSERT command to add new records.\n");
+        fprintf(stdout,
+                "No records matched in the table \"%s\". Run the INSERT command to insert new "
+                "records.\n",
+                db->table_name);
         goto cleanup;
     }
 
