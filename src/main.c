@@ -293,7 +293,7 @@ void run_show_all(const DB* db, const CmdShowAllArgs* args) {
 
 // Runs the SHOW SUMMARY command.
 void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
-    uint64_t record_count = 0;
+    size_t record_count = 0;
     // Use double to prevent infinity when adding many finite floats
     double mark_sum = 0.0;
     float highest_mark;
@@ -345,7 +345,7 @@ void run_show_summary(const DB* db, const CmdSummaryArgs* args) {
     // Print summary
     double avg_mark = mark_sum / (double)record_count;
     fprintf(stdout, "Here is a summary of the table \"%s\".\n", db->table_name);
-    fprintf(stdout, "Number of students matched: %lu\n", record_count);
+    fprintf(stdout, "Number of students matched: %zu\n", record_count);
     fprintf(stdout, "Average mark:               %.1f\n", avg_mark);
 
     fprintf(stdout, "Highest mark:               %.1f by ", highest_mark);
