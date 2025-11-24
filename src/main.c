@@ -9,6 +9,7 @@
 #include <windows.h>
 #endif
 
+#include "atomic-file.c"
 #include "db.c"
 #include "error.c"
 #include "parser.c"
@@ -488,21 +489,27 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
 // Returns whether the operation was successful.
 bool run_save(const DB* db, const CmdSaveArgs* args) {
     // Binary mode needed for cross-platform line endings
-    FILE* fptr = fopen(args->filename, "wb");
-    if (fptr == NULL) {
-        fprintf(stdout, "ERROR: Cannot open file for writing.\n");
-        return false;
+    AtomicFile* f = AtomicFile_open("wb");
+    if (f == NULL) {
+        fprintf(stdout, "ERROR: Could not open file for safe writing.\n");
+        goto error_cleanup;
     }
 
-    bool success = DB_to_file(db, fptr);
-    if (success) {
-        fprintf(stdout, "The database file \"%s\" was successfully saved.\n", args->filename);
-    } else {
-        fprintf(stdout, "Failed to save the database to \"%s\".\n", args->filename);
+    if (!DB_to_file(db, f->fptr)) {
+        fprintf(stdout, "ERROR: Failed to serialize the table \"%s\"\n", db->table_name);
+        goto error_cleanup;
+    }
+    if (!AtomicFile_close(f, args->filename)) {
+        fprintf(stdout, "ERROR: Could not save to the file \"%s\".\n", args->filename);
+        goto error_cleanup;
     }
 
-    fclose(fptr);
-    return success;
+    fprintf(stdout, "The database file \"%s\" was successfully saved.\n", args->filename);
+    return true;
+
+error_cleanup:
+    AtomicFile_delete(f);
+    return false;
 }
 
 int main(void) {
