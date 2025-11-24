@@ -157,8 +157,8 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
             case COLUMN_NAME:
             case COLUMN_PROGRAMME: {
                 char* str = read_escaped_string(&split.current);
-                bool next_is_term = (split.current[0] == ',') || (split.current[0] == '\0');
-                if (str == NULL || !next_is_term) {
+                bool is_next_delimeter = (split.current[0] == ',') || (split.current[0] == '\0');
+                if (str == NULL || !is_next_delimeter) {
                     err = DB_from_file__bad_format;
                     goto error_cleanup;
                 }

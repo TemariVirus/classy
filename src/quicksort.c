@@ -90,9 +90,9 @@ static void __swap(void* restrict a, void* restrict b, size_t n) {
     }
 }
 
-// Sorts the items in the array `arr` in-place acording to `cmp_fn`. This sort is not stable.
-// `len` is the number of items in the array.
-// `item_size` is the size of a single item in bytes.
+// Sorts the items in the array `arr` in-place acording to `cmp_fn`. This sort
+// is not stable. `len` is the number of items in the array. `item_size` is the
+// size of a single item in bytes.
 //
 // `cmp_fn` should return:
 //  - a negative value, if `lhs` should come before `rhs`.
@@ -100,8 +100,9 @@ static void __swap(void* restrict a, void* restrict b, size_t n) {
 //  - a positive value, if `lhs` should come after `rhs`.
 // `udata` is used to pass extra data to `cmp_fn`.
 //
-// This function has O(n log(n)) average time complexity, O(n^2) worst-case time complexity,
-// and O(log(n)) space complexity, where n is the number of items in the array.
+// This function has O(n log(n)) average time complexity, O(n^2) worst-case time
+// complexity, and O(log(n)) space complexity, where n is the number of items in
+// the array.
 void quicksort(void* arr, size_t len, size_t item_size,
                int(cmp_fn)(const void* lhs, const void* rhs, const void* udata),
                const void* udata) {

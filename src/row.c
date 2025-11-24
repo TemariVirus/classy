@@ -179,8 +179,6 @@ char* Row_get_string(const Row* row, Column column) {
 // Duplicate a row and its pointers.
 Row Row_dupe(const Row* row) {
     return (Row){
-        // TODO: these allocations take up a significant amount of total runtime.
-        // There has to be a better way.
         .name = strdup(row->name),
         .programme = strdup(row->programme),
         .mark = row->mark,
