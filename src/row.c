@@ -2,6 +2,7 @@
 
 #define __STDC_WANT_LIB_EXT2__ 1
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -92,7 +93,7 @@ bool parse_float(const char* str, float* out_mark) {
     return true;
 }
 
-// Read and escapes a string enclosed in double quotes.
+// Read and unescapes a string enclosed in double quotes.
 // Returns a pointer to the start of the string, or NULL on failure.
 //
 // On success, `str_ptr` is updated to point to the character after the closing quote.
@@ -132,6 +133,33 @@ char* read_escaped_string(char** str_ptr) {
     }
     // Quote not closed
     return NULL;
+}
+
+// Escapes a string in a Record for serialisation.
+// Writes the escaped string to `fptr`, enclosing it in double quotes.
+//
+// Returns whether the entire string was written.
+bool escape_string(FILE* fptr, const char* str) {
+    if (fputc('"', fptr) == EOF) {
+        return false;
+    }
+    for (; str[0] != '\0'; str++) {
+        switch (str[0]) {
+        case '"':
+        case '\\':
+            // Escape character
+            if (fputc('\\', fptr) == EOF) {
+                return false;
+            }
+            break;
+        default:
+            break;
+        }
+        if (fputc(str[0], fptr) == EOF) {
+            return false;
+        }
+    }
+    return fputc('"', fptr) != EOF;
 }
 
 // Returns the value of the specified column of the given row.

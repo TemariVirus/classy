@@ -15,7 +15,6 @@
 #include "quicksort.c"
 #include "row.c"
 #include "tokenizer.c"
-#include "save.c"
 
 #define TYPE Row*
 #define TYPED(THING) Record##THING
@@ -208,9 +207,10 @@ void run_help(void) {
 // Runs the OPEN command. `db` is only overwritten if the operation is successful.
 // Returns whether the operation was successful.
 bool run_open(DB* db, const CmdOpenArgs* args) {
+    // Binary mode needed for cross-platform line endings
     FILE* file = fopen(args->filename, "rb");
     if (file == NULL) {
-        fprintf(stdout, "Error: Could not open file \"%s\".\n", args->filename);
+        fprintf(stdout, "ERROR: Could not open file \"%s\".\n", args->filename);
         return false;
     }
 
@@ -225,20 +225,20 @@ bool run_open(DB* db, const CmdOpenArgs* args) {
         return true;
     }
     case ERROR_MISSING_TABLE_NAME: {
-        fprintf(stdout, "Error: Missing table name in file \"%s\".\n", args->filename);
+        fprintf(stdout, "ERROR: Missing table name in file \"%s\".\n", args->filename);
         return false;
     }
     case ERROR_BAD_DB_FORMAT: {
-        fprintf(stdout, "Error: Unrecognised file format in file \"%s\".\n", args->filename);
+        fprintf(stdout, "ERROR: Unrecognised file format in file \"%s\".\n", args->filename);
         return false;
     }
     case ERROR_BAD_DB_COLUMN: {
-        fprintf(stdout, "Error: Unknown, missing or duplicate column in file \"%s\".\n",
+        fprintf(stdout, "ERROR: Unknown, missing or duplicate column in file \"%s\".\n",
                 args->filename);
         return false;
     }
     case ERROR_UNORDERED_ID: {
-        fprintf(stdout, "Error: IDs in file \"%s\" are not in strictly increasing order.\n",
+        fprintf(stdout, "ERROR: IDs in file \"%s\" are not in strictly increasing order.\n",
                 args->filename);
         return false;
     }
@@ -269,7 +269,7 @@ void run_show_all(const DB* db, const CmdShowAllArgs* args) {
     // Copy records to flat array so they can be sorted
     Row** records = malloc(sizeof(Row*) * db->row_count);
     if (records == NULL) {
-        fprintf(stdout, "Error: Out of memory.\n");
+        fprintf(stdout, "ERROR: Out of memory.\n");
         return;
     }
     for (size_t i = 0; TTree_iter_next(&it, &id, &record); i++) {
@@ -485,22 +485,24 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
 }
 
 // Runs the SAVE command.
-void run_save(DB* db, const char* filename, char** last_filename) {
-    const char* save_filename = filename ? filename : *last_filename;
-    if (!save_filename) {
-        fprintf(stdout, "No filename specified and no previous file to save to.\n");
-        return;
+// Returns whether the operation was successful.
+bool run_save(const DB* db, const CmdSaveArgs* args) {
+    // Binary mode needed for cross-platform line endings
+    FILE* fptr = fopen(args->filename, "wb");
+    if (fptr == NULL) {
+        fprintf(stdout, "ERROR: Cannot open file for writing.\n");
+        return false;
     }
 
-    if (DB_save(db, save_filename)) {
-        fprintf(stdout, "The database file \"%s\" is successfully saved.\n", save_filename);
-        if (filename) {
-            free(*last_filename);
-            *last_filename = strdup(filename);
-        }
+    bool success = DB_to_file(db, fptr);
+    if (success) {
+        fprintf(stdout, "The database file \"%s\" was successfully saved.\n", args->filename);
     } else {
-        fprintf(stdout, "Failed to save the database to \"%s\".\n", save_filename);
+        fprintf(stdout, "Failed to save the database to \"%s\".\n", args->filename);
     }
+
+    fclose(fptr);
+    return success;
 }
 
 int main(void) {
@@ -620,8 +622,15 @@ int main(void) {
             }
             break;
         case CMD_SAVE:
-        if (!warn_no_db(&db)) {
-                run_save(&db, cmd.args.save.filename, &last_filename);
+            if (cmd.args.save.filename == NULL) {
+                cmd.args.save.filename = last_filename;
+            }
+            if (!warn_no_db(&db)) {
+                if (!run_save(&db, &cmd.args.save)) {
+                    break;
+                }
+                free(last_filename);
+                last_filename = strdup(cmd.args.save.filename);
             }
             break;
         }

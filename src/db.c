@@ -206,3 +206,45 @@ error_cleanup: {
     return err;
 }
 }
+
+// Serialises `db` and all its records to the given file.
+// Returns whether the operation was successful.
+bool DB_to_file(const DB* db, FILE* fptr) {
+    // Headers (intentionally left empty)
+    if (fprintf(fptr, "\r\n") < 0) {
+        return false;
+    }
+
+    // Table name
+    if (fprintf(fptr, "Table Name: %s\r\n", db->table_name) < 0) {
+        return false;
+    }
+
+    // Column headers
+    if (fprintf(fptr, "ID,Name,Programme,Mark\r\n") < 0) {
+        return false;
+    }
+    // Iterate through all records
+    TTreeIter it = TTree_iter_start(&db->data);
+    ID id;
+    Row* row;
+    while (TTree_iter_next(&it, &id, &row)) {
+        if (fprintf(fptr, "%u,", id) < 0) {
+            return false;
+        }
+        if (!escape_string(fptr, row->name)) {
+            return false;
+        }
+        if (fputc(',', fptr) == EOF) {
+            return false;
+        }
+        if (!escape_string(fptr, row->programme)) {
+            return false;
+        }
+        if (fprintf(fptr, ",%.9g\r\n", row->mark) < 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
