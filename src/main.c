@@ -636,8 +636,11 @@ int main(void) {
                 if (!run_save(&db, &cmd.args.save)) {
                     break;
                 }
-                free(last_filename);
-                last_filename = strdup(cmd.args.save.filename);
+                // Save the filename if it's new
+                if (last_filename != cmd.args.save.filename) {
+                    free(last_filename);
+                    last_filename = strdup(cmd.args.save.filename);
+                }
             }
             break;
         }
