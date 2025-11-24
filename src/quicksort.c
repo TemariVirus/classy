@@ -140,8 +140,10 @@ void quicksort(void* arr, size_t len, size_t item_size,
         // head is less than pivot, so pivot should go after head
         head = (char*)head + item_size;
     }
-    __swap(head, pivot, item_size);
-    pivot = head;
+    if (head != pivot) {
+        __swap(head, pivot, item_size);
+        pivot = head;
+    }
 
     // Sort the partitions
     size_t pivot_index = ((char*)pivot - (char*)arr) / item_size;
