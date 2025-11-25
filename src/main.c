@@ -1,5 +1,6 @@
 #define __STDC_WANT_LIB_EXT2__ 1
 #include <assert.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -485,6 +486,10 @@ void run_delete(DB* db, const CmdDeleteArgs* args) {
     char* confirmation = get_line(confirmation_buf, sizeof(confirmation_buf));
 
     print_prompt(SYSTEM_NAME);
+    // Make input uppercase to ignore case
+    for (char* p = confirmation; p != NULL && p[0] != '\0'; p++) {
+        p[0] = toupper(p[0]);
+    }
     if (confirmation == NULL || strcmp(confirmation, "Y") != 0) {
         // User did not type Y
         fprintf(stdout, "The deletion was cancelled.\n");
