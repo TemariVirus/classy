@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Macro to crash the program on unrecoverable errors.
+// `message` is printed along with the file name and line number.
 #define PANIC(message)                                                                             \
     do {                                                                                           \
         const char* reason = message; /* For type safety */                                        \
