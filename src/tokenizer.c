@@ -1,3 +1,6 @@
+// The tokenizer used for parsing commands.
+// Mean to be used in tandem with `parser.c`.
+
 #pragma once
 
 #include <assert.h>

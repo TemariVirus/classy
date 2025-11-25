@@ -1,3 +1,6 @@
+// The database structure used by Classy.
+// Serialize to a file with DB_to_file and load from a file with DB_from_file.
+
 #pragma once
 
 #define __STDC_WANT_LIB_EXT2__ 1

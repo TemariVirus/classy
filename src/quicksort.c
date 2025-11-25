@@ -1,3 +1,5 @@
+// A quicksort implementation with a custom comparator function for sorting records.
+
 #pragma once
 
 #include <assert.h>

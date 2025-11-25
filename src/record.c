@@ -1,3 +1,6 @@
+// A single record as stored in the database.
+// Also contains helper functions for serialising and deserialising records.
+
 #pragma once
 
 #define __STDC_WANT_LIB_EXT2__ 1

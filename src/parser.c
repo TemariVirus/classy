@@ -1,3 +1,6 @@
+// The command parser.
+// Checks for syntax errors and type safety.
+
 #pragma once
 
 #include <assert.h>

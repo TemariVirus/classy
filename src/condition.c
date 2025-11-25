@@ -1,3 +1,5 @@
+// A condition used for filtering records.
+
 #pragma once
 
 #include <stdint.h>

@@ -1,3 +1,5 @@
+// An atomic flie that writes to a temporary file and moves it to the target location on close.
+
 #pragma once
 
 #include <stdlib.h>

@@ -1,3 +1,5 @@
+// Generic helper functions for common string-related tasks.
+
 #pragma once
 
 #include <stdbool.h>
