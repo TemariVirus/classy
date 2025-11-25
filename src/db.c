@@ -14,6 +14,10 @@
 #include "tokenizer.c"
 #include "unreachable.c"
 
+#define TYPE char*
+#define TYPED(THING) String##THING
+#include "list.c"
+
 #define MAX_LINE_LEN 4096
 #define LINE_TERM "\r\n"
 
@@ -24,6 +28,8 @@ typedef struct DB {
     size_t record_count;
     // The name of the DB's only table.
     char* table_name;
+    // Raw headers from the file (currently not used).
+    StringList headers;
 } DB;
 
 // Create an empty database.
@@ -34,6 +40,7 @@ DB DB_create(void) {
         .data = TTree_create(),
         .record_count = 0,
         .table_name = NULL,
+        .headers = StringList_create(),
     };
 }
 
@@ -47,6 +54,7 @@ void DB_destroy(DB* db) {
     db->record_count = 0;
     free(db->table_name);
     db->table_name = NULL;
+    StringList_destroy(&db->headers);
 }
 
 // Parses the column line in the file into an array of Columns.
@@ -75,6 +83,7 @@ typedef enum {
     DB_from_file__bad_format = ERROR_BAD_DB_FORMAT,
     DB_from_file__bad_column = ERROR_BAD_DB_COLUMN,
     DB_from_file__unordered_id = ERROR_UNORDERED_ID,
+    DB_from_file__out_of_mem = ERROR_OUT_OF_MEM,
 } DB_from_file__Error;
 
 // Creates a new DB at `out_db` and inserts all records from the file.
@@ -86,10 +95,12 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
     DB_from_file__Error err;
     TTreeBulkInsert bulk = TTree_bulk_insert_start();
     char* table_name = NULL;
+    StringList headers = StringList_create();
     *out_db = (DB){
         .data = (TTree){.root = NULL, .node_allocator = NULL},
         .record_count = 0,
         .table_name = NULL,
+        .headers = StringList_create(),
     };
 
     char line[MAX_LINE_LEN];
@@ -103,6 +114,12 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
             // Blank line indicates end of headers
             break;
         }
+        char* duped = strdup(line);
+        if (duped == NULL) {
+            err = DB_from_file__out_of_mem;
+            goto error_cleanup;
+        }
+        StringList_append(&headers, duped);
     }
 
     // Read table name
@@ -196,6 +213,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
         .data = TTree_bulk_insert_end(&bulk),
         .record_count = record_count,
         .table_name = table_name,
+        .headers = headers,
     };
     return DB_from_file__ok;
 
@@ -203,6 +221,7 @@ error_cleanup: {
     TTree tree = TTree_bulk_insert_end(&bulk);
     TTree_destroy(&tree);
     free(table_name);
+    StringList_destroy(&headers);
     return err;
 }
 }
@@ -210,7 +229,12 @@ error_cleanup: {
 // Serialises `db` and all its records to the given file.
 // Returns whether the operation was successful.
 bool DB_to_file(const DB* db, FILE* fptr) {
-    // Headers (intentionally left empty)
+    // Headers
+    for (size_t i = 0; i < db->headers.length; i++) {
+        if (fprintf(fptr, "%s\r\n", db->headers.items[i]) < 0) {
+            return false;
+        }
+    }
     if (fprintf(fptr, "\r\n") < 0) {
         return false;
     }

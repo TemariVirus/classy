@@ -249,6 +249,10 @@ bool run_open(DB* db, const CmdOpenArgs* args) {
                 args->filename);
         return false;
     }
+    case ERROR_OUT_OF_MEM: {
+        fprintf(stdout, "ERROR: Out of memory when opening file \"%s\".\n", args->filename);
+        return false;
+    }
     }
 }
 
@@ -436,10 +440,10 @@ void run_query(const DB* db, const CmdQueryArgs* args) {
 void run_update(const DB* db, const CmdUpdateArgs* args) {
     Record* record = TTree_get(&db->data, args->id);
     if (record == NULL) {
-        fprintf(
-            stdout,
-            "The record with ID=%u does not exist. Run the INSERT command to insert it instead.\n",
-            args->id);
+        fprintf(stdout,
+                "The record with ID=%u does not exist. Run the INSERT command to insert it "
+                "instead.\n",
+                args->id);
         return;
     }
 
