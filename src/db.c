@@ -108,7 +108,7 @@ DB_from_file__Error DB_from_file(FILE* fptr, DB* out_db) {
     };
 
     char line[MAX_LINE_LEN];
-    // Ignore all headers
+    // Collect headers
     while (true) {
         if (!read_until_delim_or_eof(line, MAX_LINE_LEN, LINE_TERM, fptr)) {
             err = DB_from_file__bad_format;
