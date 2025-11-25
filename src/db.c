@@ -54,6 +54,10 @@ void DB_destroy(DB* db) {
     db->record_count = 0;
     free(db->table_name);
     db->table_name = NULL;
+
+    for (size_t i = 0; i < db->headers.length; i++) {
+        free(db->headers.items[i]);
+    }
     StringList_destroy(&db->headers);
 }
 

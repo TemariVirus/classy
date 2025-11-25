@@ -76,7 +76,9 @@ TEST db_from_file_missing_line_term(void) {
 TEST db_from_file_successful(void) {
     START_TEST("DB from file successful");
 
-    char db_file[] = "\r\n"
+    char db_file[] = "Database Name: Sample-CMS\r\n"
+                     "Authors: P8-6\r\n"
+                     "\r\n"
                      "Table Name: abc\r\n"
                      "Name,ID,Mark,Programme\r\n"
                      R"("student a",0,12.3,"programme a")"
@@ -91,8 +93,11 @@ TEST db_from_file_successful(void) {
 
     DB db;
     EXPECT_INT_EQUAL(ERROR_OK, DB_from_file(fptr, &db));
-    EXPECT_STRING_EQUAL("abc", db.table_name);
     EXPECT_INT_EQUAL(4, db.record_count);
+    EXPECT_STRING_EQUAL("abc", db.table_name);
+    EXPECT_INT_EQUAL(2, db.headers.length);
+    EXPECT_STRING_EQUAL("Database Name: Sample-CMS", db.headers.items[0]);
+    EXPECT_STRING_EQUAL("Authors: P8-6", db.headers.items[1]);
 
     ID id;
     Record* record;
