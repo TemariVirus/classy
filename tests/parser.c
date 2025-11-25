@@ -40,11 +40,11 @@ TEST parser_open(void) {
     }
 
     {
-        char line[] = R"(OPEN    "surrounded by 3 \\\"spaces.txt"   )";
+        char line[] = "OPEN    \"surrounded by 3 \\\\\\\"spaces.txt\"   ";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_OPEN, command.tag);
-        EXPECT_STRING_EQUAL(R"(   "surrounded by 3 \\\"spaces.txt"   )",
+        EXPECT_STRING_EQUAL("   \"surrounded by 3 \\\\\\\"spaces.txt\"   ",
                             command.args.open.filename);
         Command_destroy(&command);
     }
@@ -106,19 +106,19 @@ TEST parser_insert(void) {
     }
 
     {
-        char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95)";
+        char line[] = "INSERT ID=123 Name=\"John Doe\" Mark=95";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
-        char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95 Name="John Doe")";
+        char line[] = "INSERT ID=123 Name=\"John Doe\" Mark=95 Name=\"John Doe\"";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
-        char line[] = R"(INSERT ID=123 Name="John Doe" Mark=95 Programme= "abc \\ xyz")";
+        char line[] = "INSERT ID=123 Name=\"John Doe\" Mark=95 Programme= \"abc \\\\ xyz\"";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_INSERT, command.tag);
@@ -347,7 +347,7 @@ TEST parser_update(void) {
     }
 
     {
-        char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95)";
+        char line[] = "UPDATE ID=123 Name=\"John Doe\" Mark=95";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
@@ -360,13 +360,13 @@ TEST parser_update(void) {
     }
 
     {
-        char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95 Name="John Doe")";
+        char line[] = "UPDATE ID=123 Name=\"John Doe\" Mark=95 Name=\"John Doe\"";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) != ERROR_OK);
     }
 
     {
-        char line[] = R"(UPDATE ID=123 Name="John Doe" Mark=95 Programme= "abc \\ xyz")";
+        char line[] = "UPDATE ID=123 Name=\"John Doe\" Mark=95 Programme= \"abc \\\\ xyz\"";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_UPDATE, command.tag);
@@ -436,11 +436,11 @@ TEST parser_save(void) {
     }
 
     {
-        char line[] = R"(SAVE    "surrounded by 3 \\\"spaces.txt"   )";
+        char line[] = "SAVE    \"surrounded by 3 \\\\\\\"spaces.txt\"   ";
         Tokenizer tokenizer = Tokenizer_create(line);
         EXPECT(parse_command(&tokenizer, &command) == ERROR_OK);
         EXPECT_INT_EQUAL(CMD_SAVE, command.tag);
-        EXPECT_STRING_EQUAL(R"(   "surrounded by 3 \\\"spaces.txt"   )",
+        EXPECT_STRING_EQUAL("   \"surrounded by 3 \\\\\\\"spaces.txt\"   ",
                             command.args.save.filename);
         Command_destroy(&command);
     }

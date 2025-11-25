@@ -27,7 +27,7 @@ TEST db_from_file_bad_format(void) {
     char db_file[] = "\r\n"
                      "Table Name: abc\r\n"
                      "ID,Mark,Name,Programme\r\n"
-                     R"(1234,64.4,"name",programme")"
+                     "1234,64.4,\"name\",programme\""
                      "\r\n";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
@@ -44,9 +44,9 @@ TEST db_from_file_unordered_id(void) {
     char db_file[] = "\r\n"
                      "Table Name: abc\r\n"
                      "ID,Mark,Name,Programme\r\n"
-                     R"(4321,64.4,"name","programme")"
+                     "4321,64.4,\"name\",\"programme\""
                      "\r\n"
-                     R"(1234,64.4,"name","programme")"
+                     "1234,64.4,\"name\",\"programme\""
                      "\r\n";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
@@ -63,7 +63,7 @@ TEST db_from_file_missing_line_term(void) {
     char db_file[] = "\r\n"
                      "Table Name: abc\r\n"
                      "ID,Mark,Name,Programme\r\n"
-                     R"(1234,64.4,"name","programme")";
+                     "1234,64.4,\"name\",\"programme\"";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
     DB db;
     EXPECT_INT_EQUAL(ERROR_BAD_DB_FORMAT, DB_from_file(fptr, &db));
@@ -81,13 +81,13 @@ TEST db_from_file_successful(void) {
                      "\r\n"
                      "Table Name: abc\r\n"
                      "Name,ID,Mark,Programme\r\n"
-                     R"("student a",0,12.3,"programme a")"
+                     "\"student a\",0,12.3,\"programme a\""
                      "\r\n"
-                     R"("student b",123,4.56,"programme a")"
+                     "\"student b\",123,4.56,\"programme a\""
                      "\r\n"
-                     R"("student c",321,-2e22,"math \"\"\\\\ \"escape me\"")"
+                     "\"student c\",321,-2e22,\"math \\\"\\\"\\\\\\\\ \\\"escape me\\\"\""
                      "\r\n"
-                     R"("student d",42069,inf,"limits \\n calculus")"
+                     "\"student d\",42069,inf,\"limits \\\\n calculus\""
                      "\r\n";
     FILE* fptr = fmemopen(db_file, sizeof(db_file), "rb");
 
