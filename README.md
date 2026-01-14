@@ -133,3 +133,20 @@ Saves the active database to a file.
 If `filename` already exists, it will be overwritten.
 
 If `filename` is not specified, it defaults to the filename used in the last successful `OPEN` or `SAVE` command.
+
+## Benchmark
+
+Insert 1 million records sequentially into empty DB; single-threaded.
+
+```plain
+> poop ./out/classy -d 2000
+Benchmark 1 (26 runs): ./out/classy
+  measurement          mean ± σ            min … max           outliers
+  wall_time          77.6ms ±  485us    76.8ms … 78.7ms          0 ( 0%)
+  peak_rss           93.8MB ± 4.48KB    93.8MB … 93.8MB          3 (12%)
+  cpu_cycles          201M  ±  449K      200M  …  202M           2 ( 8%)
+  instructions        588M  ± 60.7K      588M  …  588M           0 ( 0%)
+  cache_references   1.27M  ± 27.0K     1.22M  … 1.32M           0 ( 0%)
+  cache_misses       9.78K  ±  467      9.01K  … 10.5K           0 ( 0%)
+  branch_misses      77.3K  ± 7.41K     72.1K  …  106K           3 (12%)
+```
