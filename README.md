@@ -1,6 +1,28 @@
 # classy
 
-A classy class management system
+A classy class management system.
+
+## Building
+
+This section assumes a UNIX environment.
+
+1. Install [Zig](https://ziglang.org/learn/getting-started/). This project was originally compiled with Zig 0.15.2, but any version of Zig that supports `zig cc` should work.
+2. Run `./comile.sh`. The compiled binary will be at `./out/classy`.
+
+### Building without Zig
+
+Building without Zig should be as simple as translating `./compile.sh` to use your C prefered compiler. Classy uses a single translation unit build (aka jumbo/unity build), with `src/main.c` as the entrypoint. The code has been tested to compile on MSVC as well (the GNU extensions used are replaced with MSVC equivalents).
+
+## Running tests
+
+This section assumes a UNIX environment.
+
+1. Install Zig.
+2. Run `./test.sh`.
+
+### Run tests without Zig
+
+See [Building without Zig](#building-without-zig). The only difference is that the entrypoint is now `tests/main.c`.tests
 
 ## Command Syntax
 
@@ -136,7 +158,7 @@ If `filename` is not specified, it defaults to the filename used in the last suc
 
 ## Benchmark
 
-Insert 1 million records sequentially into empty DB; single-threaded.
+Insert 1 million records with sequential IDs into empty DB; single-threaded.
 
 ```plain
 > poop ./out/classy -d 2000
